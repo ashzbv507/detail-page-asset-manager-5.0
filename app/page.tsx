@@ -138,6 +138,19 @@ const ITEM_GROUPS = [
   { label: "기타", items: ["토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "냉감 토퍼", "이불 겸 패드"] },
 ] as const;
 
+const ITEM_ORDER = new Map<string, number>(ITEM_GROUPS.flatMap((group) => group.items).map((item, index) => [item, index]));
+
+function sortTasksByItemOrder(tasks: DetailTask[]) {
+  return [...tasks].sort((left, right) => {
+    const leftOrder = ITEM_ORDER.get(left.item);
+    const rightOrder = ITEM_ORDER.get(right.item);
+    if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder;
+    if (leftOrder !== undefined) return -1;
+    if (rightOrder !== undefined) return 1;
+    return left.item.localeCompare(right.item, "ko-KR");
+  });
+}
+
 const HANGUL_INITIALS = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
 
 function getHangulInitials(value: string) {
@@ -230,7 +243,11 @@ export default function Home() {
       if (cancelled || !tasks?.length) return;
       const grouped = new Map<string, DetailTask[]>();
       tasks.forEach((task) => { const item: DetailTask = { id: task.id, brandKey: task.brandKey, product: task.productName, item: task.itemName, html: task.detailHtml || generateGeneralHtml(task.images ?? []), storeLink: task.storeLink, vendors: task.vendors, note: task.note, images: task.images, thumbnailNas: task.thumbnailNas, detailNas: task.detailNas }; const entries = grouped.get(item.product) ?? []; entries.push(item); grouped.set(item.product, entries); });
-      if (!cancelled) setDataGroups([...grouped.entries()].map(([product, items]) => ({ product, count: items.length, items })));
+      if (!cancelled) {
+        setDataGroups([...grouped.entries()]
+          .map(([product, items]) => ({ product, count: items.length, items: sortTasksByItemOrder(items) }))
+          .sort((left, right) => left.product.localeCompare(right.product, "ko-KR")));
+      }
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [selectedBrand]);
