@@ -199,7 +199,7 @@ export default function Home() {
 }
 
 function GroupRows({ group, onSelect, shareMode, selectedIds, onToggleShare, tone }: { group: AssetGroup; onSelect: (task: DetailTask) => void; shareMode: boolean; selectedIds: Set<string>; onToggleShare: (task: DetailTask) => void; tone: number }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const toggleExpanded = () => setExpanded((current) => !current);
   return <><tr className={`product-row tone-${tone}`} onClick={toggleExpanded}><td><button className="expand" aria-label={`${group.product} 하위 품목 ${expanded ? "접기" : "펼치기"}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }}>{expanded ? <ChevronDown {...iconProps} /> : <ChevronRight {...iconProps} />}</button><b>{group.product}</b></td><td><span className="count">{group.count}개</span></td><td></td><td></td><td></td><td></td><td></td></tr>{expanded && group.items?.map((item) => { const isSelected = selectedIds.has(taskKey(item)); return <tr className={`item-row ${shareMode && isSelected ? "share-selected" : ""} ${shareMode ? "share-selectable" : ""}`} key={taskKey(item)} onClick={() => shareMode ? onToggleShare(item) : onSelect(item)}><td>{item.product}</td><td>{item.item}</td><td></td><td><CellCopy value={`${item.html} ...`} disabled={shareMode} /></td><td><CellCopy value={item.thumbnailNas} disabled={shareMode} /></td><td><CellCopy value={item.detailNas} disabled={shareMode} /></td><td></td></tr>; })}</>;
 }
