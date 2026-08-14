@@ -58,23 +58,33 @@ function CellCopy({ value, disabled = false }: { value: string; disabled?: boole
 function DetailPanel({ task, onClose, onEdit }: { task: DetailTask; onClose: () => void; onEdit: () => void }) {
   const [htmlMode, setHtmlMode] = useState<"html" | "url">("html");
   const [htmlPanelMode, setHtmlPanelMode] = useState<"general" | "kurly">("general");
+  const [toastMessage, setToastMessage] = useState("");
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const images = task.images ?? [];
   const activeImages = htmlPanelMode === "general" ? images : images.filter((image) => !image.excludeFromKurly);
   const activeHtml = generateGeneralHtml(activeImages);
   const displayedHtmlLinks = htmlMode === "html" ? activeHtml.split("\n").filter(Boolean) : activeImages.map((image) => image.url);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id, task.item, task.product]);
+  useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 1800);
+  };
+  const copyPanelText = async (value: string) => { await copyText(value); showToast("복사되었습니다."); };
   return <aside className="detail-panel saved-detail-panel">
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="edit" onClick={onEdit}>편집</button><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X {...iconProps} /></button></div>
     <div className="detail-body">
       <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b><span>거래처</span><b>{task.vendors?.join(", ") || "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
-      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight {...iconProps} /></button><button type="button" className="copy-action" title="현재 내용 복사" aria-label="현재 내용 복사" onClick={() => void copyText(displayedHtmlLinks.join("\n"))}><Copy {...iconProps} /></button></span></div><div className="code-box">{displayedHtmlLinks.map((link, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${link}`}>{htmlMode === "url" ? <a href={link} target="_blank" rel="noopener noreferrer">{link}</a> : link}</p>)}</div></section>
-      <section className="detail-section paths"><h3>NAS 경로</h3><PathRow label="썸네일" value={task.thumbnailNas} /><PathRow label="상세페이지" value={task.detailNas} /></section>
+      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" data-tooltip={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight {...iconProps} /></button><button type="button" className="copy-action" data-tooltip="현재 내용 복사" title="현재 내용 복사" aria-label="현재 내용 복사" onClick={() => void copyPanelText(displayedHtmlLinks.join("\n"))}><Copy {...iconProps} /></button></span></div><div className="code-box">{displayedHtmlLinks.map((link, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${link}`}>{htmlMode === "url" ? <a href={link} target="_blank" rel="noopener noreferrer">{link}</a> : link}</p>)}</div></section>
+      <section className="detail-section paths"><h3>NAS 경로</h3><PathRow label="썸네일" value={task.thumbnailNas} onCopied={showToast} /><PathRow label="상세페이지" value={task.detailNas} onCopied={showToast} /></section>
     </div>
+    {toastMessage && <div className="detail-copy-toast" role="status">{toastMessage}</div>}
   </aside>;
 }
 
-function PathRow({ label, value }: { label: string; value: string }) {
-  return <div className="path-row"><label>{label}</label><div>{value}</div><button type="button" aria-label={`${label} 경로 복사`} onClick={() => void copyText(value)}><Copy className="copy-icon" {...iconProps} /> 복사</button></div>;
+function PathRow({ label, value, onCopied }: { label: string; value: string; onCopied: (message: string) => void }) {
+  return <div className="path-row"><label>{label}</label><div>{value}</div><button type="button" data-tooltip={`${label} 경로 복사`} aria-label={`${label} 경로 복사`} onClick={() => void copyText(value).then(() => onCopied("복사되었습니다."))}><Copy className="copy-icon" {...iconProps} /> 복사</button></div>;
 }
 
 type TaskDraftValues = { product: string; item: string; storeLink: string; note: string; thumbnailNas: string; detailNas: string };
