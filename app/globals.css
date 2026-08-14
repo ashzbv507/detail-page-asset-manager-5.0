@@ -2195,3 +2195,35 @@ main.share-page .app-header {
 .share-detail-panel .detail-tabs .close {
   padding-right: 16px;
 }
+
+/* Detail panel typography scale */
+.saved-detail-panel .detail-tabs button {
+  font-size: 16px;
+}
+.saved-detail-panel .detail-tabs .edit {
+  font-size: 14px;
+}
+.saved-detail-panel .info-grid {
+  font-size: 15px;
+  line-height: 1.45;
+}
+.saved-detail-panel .detail-section h3 {
+  font-size: 16px;
+}
+.saved-detail-panel .html-mode-tabs button {
+  font-size: 13px;
+}
+.saved-detail-panel .code-box {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.saved-detail-panel .path-row {
+  font-size: 13px;
+}
+.saved-detail-panel .path-row label {
+  font-size: 15px;
+}
+.saved-detail-panel .path-row div,
+.saved-detail-panel .path-row button {
+  font-size: 13px;
+}
