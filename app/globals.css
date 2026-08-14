@@ -186,8 +186,8 @@ h1 {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  outline: 1px solid var(--hairline);
-  outline-offset: -1px;
+  border: 2px solid #d6d6dc;
+  box-sizing: border-box;
   border-radius: 14px;
 }
 .with-detail .table-shell {
