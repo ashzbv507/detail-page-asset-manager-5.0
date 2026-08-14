@@ -1044,6 +1044,9 @@ td:last-child {
 .table-shell td:last-child {
   border-right: 0;
 }
+.table-shell th:nth-child(4) {
+  border-right: 0;
+}
 .table-shell tbody tr:last-child td {
   border-bottom: 0;
 }
