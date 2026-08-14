@@ -119,18 +119,39 @@ function Field({ label, placeholder, select, value, onChange }: { label: string;
 }
 function TextArea({ label, value, onChange }: { label: string; value?: string; onChange?: (value: string) => void }) { return <label className="field"><span>{label}</span><textarea value={value} onChange={(event) => onChange?.(event.target.value)} /></label>; }
 
-const ITEM_OPTIONS = ["차렵이불", "베개커버", "패드", "이불커버", "매트리스커버", "토퍼", "쿠션", "담요"];
+const ITEM_GROUPS = [
+  { label: "이불", items: ["차렵이불", "홑겹이불커버", "누빔이불커버", "냉감 차렵이불", "냉감 홑이불", "극세사 차렵이불"] },
+  { label: "베개커버", items: ["2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
+  { label: "패드/매트커버", items: ["침대패드", "냉감 침대패드", "극세사 침대패드", "홑겹매트커버", "누빔매트커버"] },
+  { label: "기타", items: ["토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼"] },
+] as const;
+
+const HANGUL_INITIALS = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+
+function getHangulInitials(value: string) {
+  return [...value].map((character) => {
+    const code = character.charCodeAt(0) - 0xac00;
+    return code >= 0 && code <= 11171 ? HANGUL_INITIALS[Math.floor(code / 588)] : character;
+  }).join("");
+}
+
+function matchesItem(value: string, query: string) {
+  const normalizedQuery = query.toLowerCase().replace(/\s+/g, "");
+  if (!normalizedQuery) return true;
+  const normalizedValue = value.toLowerCase().replace(/\s+/g, "");
+  return normalizedValue.includes(normalizedQuery) || getHangulInitials(value).replace(/\s+/g, "").includes(normalizedQuery);
+}
 
 function ItemSelectField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
-  const filtered = ITEM_OPTIONS.filter((item) => !value || item.includes(value));
+  const filteredGroups = ITEM_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => matchesItem(item, value)) })).filter((group) => group.items.length > 0);
   useEffect(() => {
     const close = (event: PointerEvent) => { if (event.target instanceof Node && !fieldRef.current?.contains(event.target)) setOpen(false); };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
-  return <label className="field item-select-field"><span>품목</span><div ref={fieldRef} className="item-select-control"><Search className="field-search" {...iconProps} /><input value={value} onFocus={() => setOpen(true)} onChange={(event) => { onChange(event.target.value); setOpen(true); }} placeholder="품목명을 검색하거나 선택하세요" aria-label="품목 검색" aria-expanded={open} /><ChevronDown {...iconProps} />{open && <div className="item-select-menu" role="listbox">{filtered.length ? filtered.map((item) => <button type="button" key={item} role="option" onClick={() => { onChange(item); setOpen(false); }}>{item}</button>) : <span>검색 결과가 없습니다.</span>}</div>}</div></label>;
+  return <label className="field item-select-field"><span>품목</span><div ref={fieldRef} className="item-select-control"><Search className="field-search" {...iconProps} /><input value={value} onFocus={() => setOpen(true)} onChange={(event) => { onChange(event.target.value); setOpen(true); }} placeholder="품목명을 검색하거나 선택하세요" aria-label="품목 검색" aria-expanded={open} /><ChevronDown {...iconProps} />{open && <div className="item-select-menu" role="listbox">{filteredGroups.length ? filteredGroups.map((group) => <div className="item-select-group" key={group.label}><div className="item-select-group-label">[{group.label}]</div>{group.items.map((item) => <button type="button" key={item} role="option" onClick={() => { onChange(item); setOpen(false); }}>{item}</button>)}</div>) : <span>검색 결과가 없습니다.</span>}</div>}</div></label>;
 }
 
 export default function Home() {
