@@ -1,0 +1,5 @@
+/node_modules
+/.next
+*.tsbuildinfo
+.env*
+/detail-page-asset-manager-5.0/
