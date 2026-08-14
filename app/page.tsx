@@ -55,7 +55,7 @@ function CellCopy({ value, disabled = false }: { value: string; disabled?: boole
   return <div className={`cell-copy ${disabled ? "is-disabled" : ""}`}><span>{value}</span><button className="copy-cell-button" type="button" disabled={disabled} aria-disabled={disabled} aria-label="셀 내용 복사" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!disabled) void copyText(value); }}><Copy {...iconProps} /></button></div>;
 }
 
-function DetailPanel({ task, onClose, onEdit }: { task: DetailTask; onClose: () => void; onEdit: () => void }) {
+function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onClose: () => void; onEdit: () => void; closing?: boolean }) {
   const [htmlMode, setHtmlMode] = useState<"html" | "url">("html");
   const [htmlPanelMode, setHtmlPanelMode] = useState<"general" | "kurly">("general");
   const [toastMessage, setToastMessage] = useState("");
@@ -72,7 +72,7 @@ function DetailPanel({ task, onClose, onEdit }: { task: DetailTask; onClose: () 
     toastTimerRef.current = setTimeout(() => setToastMessage(""), 1800);
   };
   const copyPanelText = async (value: string) => { await copyText(value); showToast("복사되었습니다."); };
-  return <aside className="detail-panel saved-detail-panel">
+  return <aside className={`detail-panel saved-detail-panel${closing ? " is-closing" : ""}`}>
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="edit" onClick={onEdit}>편집</button><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X {...iconProps} /></button></div>
     <div className="detail-body">
       <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b><span>거래처</span><b>{task.vendors?.join(", ") || "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
@@ -167,6 +167,8 @@ function ItemSelectField({ value, onChange }: { value: string; onChange: (value:
 export default function Home() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<DetailTask | null>(null);
+  const [detailClosing, setDetailClosing] = useState(false);
+  const detailCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modal, setModal] = useState<1 | 2 | null>(null);
   const [dataGroups, setDataGroups] = useState<AssetGroup[]>([]);
   const [editingTask, setEditingTask] = useState<DetailTask | null>(null);
@@ -179,9 +181,25 @@ export default function Home() {
   const activeBrand = BRANDS.find((brand) => brand.key === selectedBrand) ?? BRANDS[0];
   const allTasks = useMemo(() => dataGroups.flatMap((group) => group.items ?? []), [dataGroups]);
   const shownGroups = useMemo(() => dataGroups.filter(({ product, items }) => !query || `${product} ${items?.map((item) => item.item).join(" ") ?? ""}`.toLowerCase().includes(query.toLowerCase())), [dataGroups, query]);
+  const openDetail = (task: DetailTask) => {
+    if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current);
+    detailCloseTimerRef.current = null;
+    setDetailClosing(false);
+    setSelected(task);
+  };
+  const closeDetail = () => {
+    if (!selected || detailClosing) return;
+    setDetailClosing(true);
+    detailCloseTimerRef.current = setTimeout(() => {
+      setSelected(null);
+      setDetailClosing(false);
+      detailCloseTimerRef.current = null;
+    }, 180);
+  };
+  useEffect(() => () => { if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current); }, []);
   const changeBrand = (brandKey: BrandKey) => { setSelectedBrand(brandKey); setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
   const enterShareMode = () => { setSelected(null); setBrandMenuOpen(false); setShareMode(true); setShareSelection(new Set()); setShareMessage(""); };
-  const handleTaskSelect = (task: DetailTask) => { setSelected((current) => current && taskKey(current) === taskKey(task) ? null : task); };
+  const handleTaskSelect = (task: DetailTask) => { if (selected && taskKey(selected) === taskKey(task)) closeDetail(); else openDetail(task); };
   const toggleShareTask = (task: DetailTask) => { const id = taskKey(task); setShareSelection((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
   const finishShareMode = () => { setShareMode(false); setShareSelection(new Set()); setShareMessage(""); setSelected(null); };
   const createShareLink = async () => {
@@ -218,14 +236,14 @@ export default function Home() {
     if (!selected) return;
     const closeOnOutside = (event: PointerEvent) => {
       if (!(event.target instanceof Element)) return;
-      if (!event.target.closest("tr, .detail-panel, .app-header, .modal-backdrop")) setSelected(null);
+      if (!event.target.closest("tr, .detail-panel, .app-header, .modal-backdrop")) closeDetail();
     };
     document.addEventListener("pointerdown", closeOnOutside, true);
     return () => document.removeEventListener("pointerdown", closeOnOutside, true);
   }, [selected]);
   return <main className={modal ? "modal-open" : undefined}>
     <header className="app-header"><div className="brand-heading"><div className="brand-switcher"><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품명, 품목, 경로 검색" aria-label="검색" /></label><button className="new-task" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
-    <div className={`workspace ${selected ? "with-detail" : ""}`}><section className="table-shell" onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) setSelected(null); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th><th>링크</th><th>HTML / URL</th><th>썸네일 NAS</th><th>상세페이지 NAS</th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{shownGroups.map((group, index) => <GroupRows group={group} key={group.product} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer><span>제품 {dataGroups.length}개 · 품목 {dataGroups.reduce((total, group) => total + (group.items?.length ?? 0), 0)}개</span>{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}<button type="button" className={`share-button ${shareMode ? "selecting" : ""}`} disabled={shareBusy} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : shareMode && shareSelection.size ? `링크 복사 (${shareSelection.size})` : "공유"}</span></button></footer></section>{selected && !shareMode && <DetailPanel task={selected} onClose={() => setSelected(null)} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
+    <div className={`workspace ${selected ? "with-detail" : ""}`}><section className="table-shell" onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th><th>링크</th><th>HTML / URL</th><th>썸네일 NAS</th><th>상세페이지 NAS</th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{shownGroups.map((group, index) => <GroupRows group={group} key={group.product} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer><span>제품 {dataGroups.length}개 · 품목 {dataGroups.reduce((total, group) => total + (group.items?.length ?? 0), 0)}개</span>{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}<button type="button" className={`share-button ${shareMode ? "selecting" : ""}`} disabled={shareBusy} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : shareMode && shareSelection.size ? `링크 복사 (${shareSelection.size})` : "공유"}</span></button></footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
     {modal && <TaskModal step={modal} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={(draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: generateGeneralHtml(draft.images) }; void fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }).then(() => window.location.reload()).catch(() => undefined); }} />}
   </main>;
 }
