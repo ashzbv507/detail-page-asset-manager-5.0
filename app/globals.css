@@ -212,6 +212,7 @@ h1 {
   height: 52px;
   overflow: hidden;
   background: var(--header);
+  box-shadow: 0 4px 8px -6px rgba(0, 0, 0, 0.28);
 }
 .table-header > table {
   top: 0;
