@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, ArrowRight, ChevronDown, ChevronRight, Copy, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
 import { generateGeneralHtml } from "./lib/html";
 
 type DetailTask = {
@@ -269,7 +269,18 @@ export default function Home() {
 function GroupRows({ group, onSelect, shareMode, selectedIds, onToggleShare, tone }: { group: AssetGroup; onSelect: (task: DetailTask) => void; shareMode: boolean; selectedIds: Set<string>; onToggleShare: (task: DetailTask) => void; tone: number }) {
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = () => setExpanded((current) => !current);
-  return <><tr className={`product-row tone-${tone}`} onClick={toggleExpanded}><td><button className="expand" aria-label={`${group.product} 하위 품목 ${expanded ? "접기" : "펼치기"}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }}>{expanded ? <ChevronDown {...iconProps} /> : <ChevronRight {...iconProps} />}</button><b>{group.product}</b></td><td><span className="count">{group.count}개</span></td><td></td><td></td><td></td><td></td><td></td></tr>{expanded && group.items?.map((item) => { const isSelected = selectedIds.has(taskKey(item)); return <tr className={`item-row ${shareMode && isSelected ? "share-selected" : ""} ${shareMode ? "share-selectable" : ""}`} key={taskKey(item)} onClick={() => shareMode ? onToggleShare(item) : onSelect(item)}><td>{item.product}</td><td>{item.item}</td><td></td><td><CellCopy value={`${item.html} ...`} disabled={shareMode} /></td><td><CellCopy value={item.thumbnailNas} disabled={shareMode} /></td><td><CellCopy value={item.detailNas} disabled={shareMode} /></td><td><div className="table-note"><div className="vendor-badges">{(item.vendors ?? []).map((vendor) => <span className={`vendor-badge ${vendorClass(vendor)}`} key={vendor}>{vendor}</span>)}</div>{item.note && <span className="table-note-text">{item.note}</span>}</div></td></tr>; })}</>;
+  return <>
+    <tr className={`product-row tone-${tone}`} onClick={toggleExpanded}><td><button className="expand" aria-label={`${group.product} 하위 품목 ${expanded ? "접기" : "펼치기"}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }}>{expanded ? <ChevronDown {...iconProps} /> : <ChevronRight {...iconProps} />}</button><b>{group.product}</b></td><td><span className="count">{group.count}개</span></td><td></td><td></td><td></td><td></td><td></td></tr>
+    {expanded && group.items?.map((item) => {
+      const isSelected = selectedIds.has(taskKey(item));
+      return <tr className={`item-row ${shareMode && isSelected ? "share-selected" : ""} ${shareMode ? "share-selectable" : ""}`} key={taskKey(item)} onClick={() => shareMode ? onToggleShare(item) : onSelect(item)}>
+        <td>{item.product}</td><td>{item.item}</td>
+        <td>{item.storeLink ? <a className="store-link" href={item.storeLink} target="_blank" rel="noopener noreferrer" title="자사몰 상품 열기" aria-label={`${item.product} ${item.item} 자사몰 상품 열기`} onClick={(event) => event.stopPropagation()}><ExternalLink {...iconProps} /></a> : <span className="store-link-empty">-</span>}</td>
+        <td><CellCopy value={`${item.html} ...`} disabled={shareMode} /></td><td><CellCopy value={item.thumbnailNas} disabled={shareMode} /></td><td><CellCopy value={item.detailNas} disabled={shareMode} /></td>
+        <td><div className="table-note"><div className="vendor-badges">{(item.vendors ?? []).map((vendor) => <span className={`vendor-badge ${vendorClass(vendor)}`} key={vendor}>{vendor}</span>)}</div>{item.note && <span className="table-note-text">{item.note}</span>}</div></td>
+      </tr>;
+    })}
+  </>;
 }
 
 function vendorClass(vendor: string) {

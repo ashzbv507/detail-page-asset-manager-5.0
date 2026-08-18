@@ -1102,6 +1102,31 @@ td:last-child {
 .item-row td:nth-child(2) {
   text-align: center;
 }
+.item-row td:nth-child(3) {
+  text-align: center;
+}
+.store-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+.store-link:hover {
+  text-decoration: underline;
+}
+.store-link svg {
+  width: 18px;
+  height: 18px;
+}
+.store-link-empty {
+  color: var(--subtle);
+}
 .cell-copy span:first-child {
   flex: 1 1 auto;
   min-width: 0;
