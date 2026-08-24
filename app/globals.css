@@ -2360,6 +2360,19 @@ main.share-page .app-header {
   background: #fff;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
 }
+.table-copy-toast {
+  position: fixed;
+  z-index: 230;
+  right: max(40px, calc((100vw - min(1640px, calc(100vw - 80px))) / 2 + 18px));
+  bottom: 34px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  background: rgba(30, 30, 32, 0.92);
+  color: #fff;
+  font-size: 13px;
+  line-height: 18px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+}
 .row-context-menu button {
   display: flex;
   align-items: center;

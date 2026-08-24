@@ -55,7 +55,7 @@ async function copyText(value: string) {
 }
 
 function CellCopy({ value, disabled = false }: { value: string; disabled?: boolean }) {
-  return <div className={`cell-copy ${disabled ? "is-disabled" : ""}`}><span>{value}</span><button className="copy-cell-button" type="button" disabled={disabled} aria-disabled={disabled} aria-label="셀 내용 복사" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!disabled) void copyText(value); }}><Copy {...iconProps} /></button></div>;
+  return <div className={`cell-copy ${disabled ? "is-disabled" : ""}`}><span>{value}</span><button className="copy-cell-button" type="button" disabled={disabled} aria-disabled={disabled} aria-label="셀 내용 복사" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!disabled) void copyText(value).then(() => window.dispatchEvent(new Event("asset-cell-copied"))); }}><Copy {...iconProps} /></button></div>;
 }
 
 function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onClose: () => void; onEdit: () => void; closing?: boolean }) {
@@ -203,6 +203,8 @@ export default function Home() {
   const [shareSelection, setShareSelection] = useState<Set<string>>(() => new Set());
   const [shareBusy, setShareBusy] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const [tableToast, setTableToast] = useState("");
+  const tableToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenu | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DetailTask | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -225,6 +227,18 @@ export default function Home() {
     }, 180);
   };
   useEffect(() => () => { if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current); }, []);
+  useEffect(() => {
+    const showToast = () => {
+      setTableToast("복사되었습니다.");
+      if (tableToastTimerRef.current) clearTimeout(tableToastTimerRef.current);
+      tableToastTimerRef.current = setTimeout(() => setTableToast(""), 1800);
+    };
+    window.addEventListener("asset-cell-copied", showToast);
+    return () => {
+      window.removeEventListener("asset-cell-copied", showToast);
+      if (tableToastTimerRef.current) clearTimeout(tableToastTimerRef.current);
+    };
+  }, []);
   useEffect(() => {
     const open = (event: Event) => {
       const detail = (event as CustomEvent<RowContextMenu>).detail;
@@ -309,6 +323,7 @@ export default function Home() {
   return <main className={modal ? "modal-open" : undefined}>
     <header className="app-header"><div className="brand-heading"><div className="brand-switcher"><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품명, 품목, 경로 검색" aria-label="검색" /></label><button className="new-task" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
     <div className={`workspace ${selected ? "with-detail" : ""}`}><section className="table-shell" onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th><th>링크</th><th>HTML / URL</th><th>썸네일 NAS</th><th>상세페이지 NAS</th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{shownGroups.map((group, index) => <GroupRows group={group} key={group.product} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer className={shareMode ? "share-mode-footer" : undefined}>{shareMode ? <div className="share-selection-hint"><span>자산 행을 선택하세요</span><b>{shareSelection.size}개 선택됨</b></div> : <span className="table-summary">제품 {dataGroups.length}개 · 품목 {dataGroups.reduce((total, group) => total + (group.items?.length ?? 0), 0)}개</span>}{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}{shareMode ? <div className="share-actions"><button type="button" className="share-cancel" disabled={shareBusy} onClick={finishShareMode}>취소</button><button type="button" className="share-copy-button" disabled={shareBusy || shareSelection.size === 0} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : "링크 복사"}</span></button></div> : <button type="button" className="share-button" disabled={shareBusy} onClick={enterShareMode}><Share2 {...iconProps} /><span>공유</span></button>}</footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
+    {tableToast && <div className="table-copy-toast" role="status">{tableToast}</div>}
     {rowContextMenu && <div className="row-context-menu" role="menu" style={{ left: rowContextMenu.x, top: rowContextMenu.y }}><button type="button" role="menuitem" onClick={() => { setDeleteTarget(rowContextMenu.task); setRowContextMenu(null); }}><Trash2 {...iconProps} /> 삭제</button></div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation"><section className="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title"><h2 id="delete-confirm-title">행 삭제</h2><p><strong>{deleteTarget.product} {deleteTarget.item}</strong>을 삭제하시겠습니까?</p><div><button type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>아니오</button><button type="button" className="delete-confirm-button" disabled={deleteBusy} onClick={() => void confirmDelete()}>{deleteBusy ? "삭제 중..." : "예"}</button></div></section></div>}
     {modal && <TaskModal step={modal} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={(draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: generateGeneralHtml(draft.images) }; void fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }).then(() => window.location.reload()).catch(() => undefined); }} />}
