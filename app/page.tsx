@@ -18,6 +18,8 @@ type DetailTask = {
   images?: ImageAsset[];
 };
 
+type RowContextMenu = { task: DetailTask; x: number; y: number };
+
 type ImageAsset = { id: string; name: string; url: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
 type AssetGroup = { product: string; count: number; items?: DetailTask[] };
 
@@ -201,6 +203,9 @@ export default function Home() {
   const [shareSelection, setShareSelection] = useState<Set<string>>(() => new Set());
   const [shareBusy, setShareBusy] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const [rowContextMenu, setRowContextMenu] = useState<RowContextMenu | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DetailTask | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const activeBrand = BRANDS.find((brand) => brand.key === selectedBrand) ?? BRANDS[0];
   const allTasks = useMemo(() => dataGroups.flatMap((group) => group.items ?? []), [dataGroups]);
   const shownGroups = useMemo(() => dataGroups.filter(({ product, items }) => !query || `${product} ${items?.map((item) => item.item).join(" ") ?? ""}`.toLowerCase().includes(query.toLowerCase())), [dataGroups, query]);
@@ -220,9 +225,43 @@ export default function Home() {
     }, 180);
   };
   useEffect(() => () => { if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current); }, []);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const detail = (event as CustomEvent<RowContextMenu>).detail;
+      if (detail) setRowContextMenu({ task: detail.task, x: Math.min(detail.x, window.innerWidth - 136), y: Math.min(detail.y, window.innerHeight - 52) });
+    };
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".row-context-menu")) return;
+      setRowContextMenu(null);
+    };
+    window.addEventListener("asset-row-context-menu", open);
+    document.addEventListener("pointerdown", dismiss);
+    return () => { window.removeEventListener("asset-row-context-menu", open); document.removeEventListener("pointerdown", dismiss); };
+  }, []);
   const changeBrand = (brandKey: BrandKey) => { setSelectedBrand(brandKey); setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
   const enterShareMode = () => { setSelected(null); setBrandMenuOpen(false); setShareMode(true); setShareSelection(new Set()); setShareMessage(""); };
   const handleTaskSelect = (task: DetailTask) => { if (selected && taskKey(selected) === taskKey(task)) closeDetail(); else openDetail(task); };
+  const confirmDelete = async () => {
+    if (!deleteTarget?.id) return;
+    setDeleteBusy(true);
+    try {
+      const response = await fetch(`/api/tasks?id=${encodeURIComponent(deleteTarget.id)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("행을 삭제하지 못했습니다.");
+      const deletedKey = taskKey(deleteTarget);
+      setDataGroups((current) => current.map((group) => {
+        const items = (group.items ?? []).filter((task) => taskKey(task) !== deletedKey);
+        return { ...group, count: items.length, items };
+      }).filter((group) => Boolean(group.items?.length)));
+      if (selected && taskKey(selected) === deletedKey) setSelected(null);
+      setShareSelection((current) => { const next = new Set(current); next.delete(deletedKey); return next; });
+      setDeleteTarget(null);
+      setShareMessage("행이 삭제되었습니다.");
+    } catch (error) {
+      setShareMessage(error instanceof Error ? error.message : "행을 삭제하지 못했습니다.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
   const toggleShareTask = (task: DetailTask) => { const id = taskKey(task); setShareSelection((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
   const finishShareMode = () => { setShareMode(false); setShareSelection(new Set()); setShareMessage(""); setSelected(null); };
   const createShareLink = async () => {
@@ -270,6 +309,8 @@ export default function Home() {
   return <main className={modal ? "modal-open" : undefined}>
     <header className="app-header"><div className="brand-heading"><div className="brand-switcher"><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품명, 품목, 경로 검색" aria-label="검색" /></label><button className="new-task" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
     <div className={`workspace ${selected ? "with-detail" : ""}`}><section className="table-shell" onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th><th>링크</th><th>HTML / URL</th><th>썸네일 NAS</th><th>상세페이지 NAS</th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{shownGroups.map((group, index) => <GroupRows group={group} key={group.product} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer className={shareMode ? "share-mode-footer" : undefined}>{shareMode ? <div className="share-selection-hint"><span>자산 행을 선택하세요</span><b>{shareSelection.size}개 선택됨</b></div> : <span className="table-summary">제품 {dataGroups.length}개 · 품목 {dataGroups.reduce((total, group) => total + (group.items?.length ?? 0), 0)}개</span>}{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}{shareMode ? <div className="share-actions"><button type="button" className="share-cancel" disabled={shareBusy} onClick={finishShareMode}>취소</button><button type="button" className="share-copy-button" disabled={shareBusy || shareSelection.size === 0} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : "링크 복사"}</span></button></div> : <button type="button" className="share-button" disabled={shareBusy} onClick={enterShareMode}><Share2 {...iconProps} /><span>공유</span></button>}</footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
+    {rowContextMenu && <div className="row-context-menu" role="menu" style={{ left: rowContextMenu.x, top: rowContextMenu.y }}><button type="button" role="menuitem" onClick={() => { setDeleteTarget(rowContextMenu.task); setRowContextMenu(null); }}><Trash2 {...iconProps} /> 삭제</button></div>}
+    {deleteTarget && <div className="delete-confirm-backdrop" role="presentation"><section className="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title"><h2 id="delete-confirm-title">행 삭제</h2><p><strong>{deleteTarget.product} {deleteTarget.item}</strong>을 삭제하시겠습니까?</p><div><button type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>아니오</button><button type="button" className="delete-confirm-button" disabled={deleteBusy} onClick={() => void confirmDelete()}>{deleteBusy ? "삭제 중..." : "예"}</button></div></section></div>}
     {modal && <TaskModal step={modal} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={(draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: generateGeneralHtml(draft.images) }; void fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }).then(() => window.location.reload()).catch(() => undefined); }} />}
   </main>;
 }
@@ -281,7 +322,7 @@ function GroupRows({ group, onSelect, shareMode, selectedIds, onToggleShare, ton
     <tr className={`product-row tone-${tone}`} onClick={toggleExpanded}><td><button className="expand" aria-label={`${group.product} 하위 품목 ${expanded ? "접기" : "펼치기"}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }}>{expanded ? <ChevronDown {...iconProps} /> : <ChevronRight {...iconProps} />}</button><b>{group.product}</b></td><td><span className="count">{group.count}개</span></td><td></td><td></td><td></td><td></td><td></td></tr>
     {expanded && group.items?.map((item) => {
       const isSelected = selectedIds.has(taskKey(item));
-      return <tr className={`item-row ${shareMode && isSelected ? "share-selected" : ""} ${shareMode ? "share-selectable" : ""}`} key={taskKey(item)} onClick={() => shareMode ? onToggleShare(item) : onSelect(item)}>
+      return <tr className={`item-row ${shareMode && isSelected ? "share-selected" : ""} ${shareMode ? "share-selectable" : ""}`} key={taskKey(item)} onClick={() => shareMode ? onToggleShare(item) : onSelect(item)} onContextMenu={(event) => { if (shareMode) return; event.preventDefault(); window.dispatchEvent(new CustomEvent<RowContextMenu>("asset-row-context-menu", { detail: { task: item, x: event.clientX, y: event.clientY } })); }}>
         <td>{item.product}</td><td>{item.item}</td>
         <td>{item.storeLink ? <a className="store-link" href={item.storeLink} target="_blank" rel="noopener noreferrer" title="자사몰 상품 열기" aria-label={`${item.product} ${item.item} 자사몰 상품 열기`} onClick={(event) => event.stopPropagation()}><ExternalLink {...iconProps} /></a> : <span className="store-link-empty">-</span>}</td>
         <td><CellCopy value={`${item.html} ...`} disabled={shareMode} /></td><td><CellCopy value={item.thumbnailNas} disabled={shareMode} /></td><td><CellCopy value={item.detailNas} disabled={shareMode} /></td>

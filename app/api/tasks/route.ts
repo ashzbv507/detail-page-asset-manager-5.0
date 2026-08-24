@@ -106,3 +106,12 @@ export async function PATCH(request: Request) {
     return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
   } catch (error) { return failure(error); }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const id = text(new URL(request.url).searchParams.get("id"));
+    if (!id) return Response.json({ error: "삭제할 작업 ID가 없습니다." }, { status: 400 });
+    await supabaseRequest(`asset_tasks?id=eq.${encodeURIComponent(id)}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+    return Response.json({ id });
+  } catch (error) { return failure(error); }
+}
