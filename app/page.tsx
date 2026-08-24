@@ -90,8 +90,15 @@ function PathRow({ label, value, onCopied }: { label: string; value: string; onC
 
 type TaskDraftValues = { product: string; item: string; storeLink: string; note: string; thumbnailNas: string; detailNas: string; vendors: string[] };
 
+const DEFAULT_BRAND_IMAGE: ImageAsset = {
+  id: "default-amante-brand-image",
+  name: "amante_brand_image.jpg",
+  url: "https://img.amante.co.kr/images/ani_img/amante_brand_image.jpg",
+  mimeType: "image/jpeg",
+};
+
 function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }) => void; initialTask?: DetailTask | null }) {
-  const [images, setImages] = useState<ImageAsset[]>(() => initialTask?.images ?? []);
+  const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : [DEFAULT_BRAND_IMAGE]);
   const [draft, setDraft] = useState<TaskDraftValues>(() => ({ product: initialTask?.product ?? "", item: initialTask?.item ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", vendors: initialTask?.vendors ?? [] }));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -103,7 +110,8 @@ function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
     const next = Array.from(files).map((file, index) => ({ id: `${file.name}-${file.lastModified}-${index}`, name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, excludeFromKurly: false }));
-    setImages((current) => sortImages([...current, ...next]));
+    const batch = next.length > 1 ? sortImages(next) : next;
+    setImages((current) => [...current, ...batch]);
   };
   const removeImage = (id: string) => setImages((current) => current.filter((image) => image.id !== id));
   const toggleKurlyExclusion = (id: string) => setImages((current) => current.map((image) => image.id === id ? { ...image, excludeFromKurly: !image.excludeFromKurly } : image));
