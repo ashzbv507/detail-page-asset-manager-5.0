@@ -1,4 +1,6 @@
-type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number };
+import { buildImageUrl } from "../../lib/html";
+
+type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
 
 type TaskPayload = {
   id?: string;
@@ -36,6 +38,18 @@ const BRAND_KEYS = ["amante", "imbedding", "serendiment", "sommier"] as const;
 function text(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function list(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : []; }
 function brand(value: unknown) { const key = text(value); return BRAND_KEYS.includes(key as typeof BRAND_KEYS[number]) ? key : "amante"; }
+const KURLY_EXCLUDE_MARKER = "#kurly-excluded";
+
+function filenameFrom(value: string) {
+  const filename = value.split("/").pop()?.split(/[?#]/)[0] ?? "";
+  try { return decodeURIComponent(filename); } catch { return filename; }
+}
+
+function storedImageUrl(image: ImagePayload) {
+  const filename = text(image.name) || filenameFrom(text(image.url));
+  return filename ? `${buildImageUrl(filename)}${image.excludeFromKurly ? KURLY_EXCLUDE_MARKER : ""}` : "";
+}
+
 function config() {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
   const secret = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,11 +65,15 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
 function toRow(payload: TaskPayload): DatabaseRow {
   const productName = text(payload.productName); const itemName = text(payload.itemName);
   if (!productName || !itemName) throw new Error("제품명과 품목은 필수입니다.");
-  const images = Array.isArray(payload.images) ? payload.images.map((image) => text(image.url)).filter(Boolean) : list(payload.imageUrls);
+  const images = Array.isArray(payload.images) ? payload.images.map(storedImageUrl).filter(Boolean) : list(payload.imageUrls);
   return { id: text(payload.id) || crypto.randomUUID(), brand_key: brand(payload.brandKey), product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), vendors: list(payload.vendors), note: text(payload.note) };
 }
 function toClient(row: DatabaseRow) {
-  const images = (row.image_urls ?? []).map((url, index) => ({ id: `${row.id}-image-${index}-${Buffer.from(url).toString("base64url").slice(0, 10)}`, name: url.split("/").pop() || `image-${index + 1}`, url }));
+  const images = (row.image_urls ?? []).map((storedUrl, index) => {
+    const excludeFromKurly = storedUrl.endsWith(KURLY_EXCLUDE_MARKER);
+    const url = excludeFromKurly ? storedUrl.slice(0, -KURLY_EXCLUDE_MARKER.length) : storedUrl;
+    return { id: `${row.id}-image-${index}-${Buffer.from(storedUrl).toString("base64url").slice(0, 10)}`, name: filenameFrom(url) || `image-${index + 1}`, url, excludeFromKurly };
+  });
   return { id: row.id, brandKey: brand(row.brand_key), productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", detailHtml: row.detail_html ?? "" };
 }
 function failure(error: unknown) { const message = error instanceof Error ? error.message : "Supabase 연결 중 오류가 발생했습니다."; return Response.json({ error: message }, { status: message.includes("환경 변수") ? 503 : message.includes("필수") ? 400 : 502 }); }
