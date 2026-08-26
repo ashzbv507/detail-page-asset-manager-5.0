@@ -3,12 +3,10 @@ import { createHash, randomBytes } from "node:crypto";
 type ShareImage = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
 type ShareTask = { id?: string; brandKey?: string; product?: string; item?: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; images?: ShareImage[] };
 type ShareRecord = { tokenHash: string; tasks: ShareTask[]; createdAt: string; expiresAt: string };
+type DatabaseTask = { id: string; brand_key: string; product_name: string; item_name: string; store_link: string; image_urls: string[]; detail_html: string; thumbnail_nas: string; detail_nas: string; vendors: string[]; note: string };
 
-const shareStore = (() => {
-  const root = globalThis as typeof globalThis & { __assetShareStore?: Map<string, ShareRecord> };
-  root.__assetShareStore ??= new Map<string, ShareRecord>();
-  return root.__assetShareStore;
-})();
+const KURLY_EXCLUDE_MARKER = "#kurly-excluded";
+const PERMANENT_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
 
 function tokenHash(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -45,6 +43,27 @@ function normalizeTask(task: ShareTask): ShareTask | null {
   };
 }
 
+function filenameFrom(value: string) {
+  const filename = value.split("/").pop()?.split(/[?#]/)[0] ?? "";
+  try { return decodeURIComponent(filename); } catch { return filename; }
+}
+
+function toSharedTask(row: DatabaseTask): ShareTask {
+  const images = (row.image_urls ?? []).map((storedUrl, index) => {
+    const excludeFromKurly = storedUrl.endsWith(KURLY_EXCLUDE_MARKER);
+    const url = excludeFromKurly ? storedUrl.slice(0, -KURLY_EXCLUDE_MARKER.length) : storedUrl;
+    return { id: `${row.id}-image-${index}`, name: filenameFrom(url) || `image-${index + 1}`, url, excludeFromKurly };
+  });
+  return { id: row.id, brandKey: row.brand_key, product: row.product_name, item: row.item_name, html: row.detail_html ?? "", storeLink: row.store_link ?? "", vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", images };
+}
+
+async function getCurrentTasks(taskIds: string[]) {
+  const ids = taskIds.filter((id) => /^[a-z0-9-]{36}$/i.test(id));
+  if (!ids.length) return [];
+  const response = await supabaseRequest(`asset_tasks?select=id,brand_key,product_name,item_name,store_link,image_urls,detail_html,thumbnail_nas,detail_nas,vendors,note&id=in.(${encodeURIComponent(ids.join(","))})&order=created_at.asc`);
+  return (await response.json() as DatabaseTask[]).map(toSharedTask);
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json() as { tasks?: ShareTask[] };
@@ -53,14 +72,8 @@ export async function POST(request: Request) {
     const token = randomBytes(32).toString("base64url");
     const tokenHashValue = tokenHash(token);
     const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + 1000 * 60 * 60 * 24 * 30);
-    const record: ShareRecord = { tokenHash: tokenHashValue, tasks, createdAt: createdAt.toISOString(), expiresAt: expiresAt.toISOString() };
-    shareStore.set(tokenHashValue, record);
-    try {
-      await supabaseRequest("asset_shares", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ token_hash: tokenHashValue, snapshot_data: { tasks }, created_at: record.createdAt, expires_at: record.expiresAt }) });
-    } catch {
-      // The local fallback keeps the feature usable until the asset_shares migration is applied.
-    }
+    const record: ShareRecord = { tokenHash: tokenHashValue, tasks, createdAt: createdAt.toISOString(), expiresAt: PERMANENT_EXPIRES_AT };
+    await supabaseRequest("asset_shares", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ token_hash: tokenHashValue, snapshot_data: { taskIds: tasks.map((task) => task.id) }, created_at: record.createdAt, expires_at: record.expiresAt }) });
     return Response.json({ shareUrl: `/share/${token}`, expiresAt: record.expiresAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : "공유 링크를 만들지 못했습니다.";
@@ -70,14 +83,14 @@ export async function POST(request: Request) {
 
 export async function getShareRecord(token: string) {
   const hash = tokenHash(token);
-  const local = shareStore.get(hash);
-  if (local) return local;
   try {
-    const response = await supabaseRequest(`asset_shares?select=snapshot_data,created_at,expires_at&token_hash=eq.${encodeURIComponent(hash)}&limit=1`);
-    const rows = await response.json() as Array<{ snapshot_data?: { tasks?: ShareTask[] }; created_at?: string; expires_at?: string }>;
+    const response = await supabaseRequest(`asset_shares?select=snapshot_data,created_at,expires_at&token_hash=eq.${encodeURIComponent(hash)}&revoked_at=is.null&limit=1`);
+    const rows = await response.json() as Array<{ snapshot_data?: { tasks?: ShareTask[]; taskIds?: string[] }; created_at?: string; expires_at?: string }>;
     const row = rows[0];
-    if (!row?.snapshot_data?.tasks?.length) return null;
-    const record: ShareRecord = { tokenHash: hash, tasks: row.snapshot_data.tasks, createdAt: row.created_at ?? "", expiresAt: row.expires_at ?? "" };
+    if (!row?.snapshot_data) return null;
+    const taskIds = Array.isArray(row.snapshot_data.taskIds) ? row.snapshot_data.taskIds.filter((id): id is string => typeof id === "string") : [];
+    const tasks = taskIds.length ? await getCurrentTasks(taskIds) : (row.snapshot_data.tasks ?? []);
+    const record: ShareRecord = { tokenHash: hash, tasks, createdAt: row.created_at ?? "", expiresAt: row.expires_at ?? "" };
     if (record.expiresAt && Date.parse(record.expiresAt) < Date.now()) return null;
     return record;
   } catch {
