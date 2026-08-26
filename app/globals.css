@@ -204,6 +204,9 @@ h1 {
   flex: 0 0 calc(100% - 558px);
 }
 .table-header {
+  border-radius: 13px 13px 0 0;
+  clip-path: inset(0 round 13px 13px 0 0);
+  isolation: isolate;
   position: absolute;
   top: 0;
   right: 0;
@@ -212,7 +215,7 @@ h1 {
   height: 52px;
   padding-right: 8px;
   overflow: hidden;
-  background: var(--header);
+  background: #888888;
   box-shadow: 0 4px 8px -6px rgba(0, 0, 0, 0.28);
 }
 .table-header > table {
@@ -281,8 +284,8 @@ th {
   padding: 0 14px;
   border-right: 1px solid var(--gridline);
   border-bottom: 1px solid var(--border);
-  background: var(--header);
-  color: #3a3a3c;
+  background: #888888;
+  color: #ffffff;
   font-size: 16px;
   font-weight: 600;
   line-height: 20px;
@@ -764,9 +767,15 @@ td:last-child {
 }
 .step-one > section {
   padding-right: 20px;
+  display: flex;
+  flex-direction: column;
 }
 .step-one > section + section {
   padding-right: 50px;
+}
+.step-one > section > .field:last-child {
+  margin-top: auto;
+  margin-bottom: 0;
 }
 .step-two {
   display: grid;
@@ -2057,13 +2066,7 @@ td:last-child {
   background: rgba(255, 255, 255, 0.55);
 }
 .item-row.share-selected td {
-  background: linear-gradient(
-    to bottom,
-    transparent 2px,
-    rgba(0, 122, 255, 0.12) 2px,
-    rgba(0, 122, 255, 0.12) calc(100% - 2px),
-    transparent calc(100% - 2px)
-  );
+  background: rgba(0, 122, 255, 0.12);
   box-shadow: none;
 }
 .cell-copy.is-disabled {
