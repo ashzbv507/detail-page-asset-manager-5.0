@@ -101,7 +101,9 @@ export async function PATCH(request: Request) {
   try {
     const id = text(new URL(request.url).searchParams.get("id"));
     if (!id) return Response.json({ error: "수정할 작업 ID가 없습니다." }, { status: 400 });
-    const row = toRow(await request.json() as TaskPayload);
+    const body = await request.json() as TaskPayload | { task?: TaskPayload };
+    const payload = ("task" in body && body.task ? body.task : body) as TaskPayload;
+    const row = toRow(payload);
     const response = await supabaseRequest(`asset_tasks?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ ...row, id }) });
     return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
   } catch (error) { return failure(error); }
