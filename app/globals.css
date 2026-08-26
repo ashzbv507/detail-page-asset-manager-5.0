@@ -2318,6 +2318,22 @@ main.share-page .app-header {
   padding-right: 16px;
 }
 
+/* Shared links use the exact same table frame and cell scale as the main asset table. */
+.share-workspace .table-scroll > .share-table {
+  min-width: 0;
+}
+.share-workspace .share-table td {
+  height: 48px;
+  padding: 0 14px;
+  color: #727277;
+  font-size: 14px;
+}
+.share-workspace .share-table .item-row td:first-child,
+.share-workspace .share-table .item-row td:nth-child(2),
+.share-workspace .share-table .item-row td:nth-child(3) {
+  text-align: center;
+}
+
 /* Detail panel typography scale */
 .saved-detail-panel .detail-tabs button {
   font-size: 16px;
