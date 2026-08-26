@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeftRight, ArrowRight, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
 import { generateGeneralHtml } from "./lib/html";
 
@@ -36,6 +36,28 @@ const BRANDS: Array<{ key: BrandKey; name: string; image: string }> = [
   { key: "sommier", name: "소미에르", image: "/brands/sommier.png" },
 ];
 
+function brandFromLocation(): BrandKey {
+  if (typeof window === "undefined") return "amante";
+  const brandKey = new URLSearchParams(window.location.search).get("brand");
+  return BRANDS.some((brand) => brand.key === brandKey) ? brandKey as BrandKey : "amante";
+}
+
+function writeBrandToLocation(brandKey: BrandKey) {
+  const url = new URL(window.location.href);
+  if (brandKey === "amante") url.searchParams.delete("brand");
+  else url.searchParams.set("brand", brandKey);
+  window.history.replaceState(null, "", url);
+}
+
+function subscribeToBrandLocation(onStoreChange: () => void) {
+  window.addEventListener("popstate", onStoreChange);
+  return () => window.removeEventListener("popstate", onStoreChange);
+}
+
+function serverBrandSnapshot(): BrandKey {
+  return "amante";
+}
+
 const iconProps = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
 const VENDOR_OPTIONS = ["컬리 ONLY", "오집 ONLY", "퀸잇 ONLY", "네이버 ONLY"] as const;
 
@@ -65,8 +87,8 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const images = task.images ?? [];
   const activeImages = htmlPanelMode === "general" ? images : images.filter((image) => !image.excludeFromKurly);
-  const activeHtml = generateGeneralHtml(activeImages);
-  const displayedHtmlLinks = htmlMode === "html" ? activeHtml.split("\n").filter(Boolean) : activeImages.map((image) => image.url);
+  const activeHtml = htmlPanelMode === "general" ? task.html || generateGeneralHtml(activeImages) : generateGeneralHtml(activeImages);
+  const displayedHtmlLinks = htmlMode === "html" ? activeHtml.split("\n").filter(Boolean) : [...activeHtml.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id, task.item, task.product]);
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
   const showToast = (message: string) => {
@@ -90,7 +112,7 @@ function PathRow({ label, value, onCopied }: { label: string; value: string; onC
   return <div className="path-row"><label>{label}</label><div>{value}</div><button type="button" data-tooltip={`${label} 경로 복사`} aria-label={`${label} 경로 복사`} onClick={() => void copyText(value).then(() => onCopied("복사되었습니다."))}><Copy className="copy-icon" {...iconProps} /> 복사</button></div>;
 }
 
-type TaskDraftValues = { product: string; item: string; storeLink: string; note: string; thumbnailNas: string; detailNas: string; vendors: string[] };
+type TaskDraftValues = { product: string; item: string; storeLink: string; note: string; thumbnailNas: string; detailNas: string; vendors: string[]; detailHtml: string };
 
 const DEFAULT_BRAND_IMAGE: ImageAsset = {
   id: "default-amante-brand-image",
@@ -101,12 +123,14 @@ const DEFAULT_BRAND_IMAGE: ImageAsset = {
 
 function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }) => void; initialTask?: DetailTask | null }) {
   const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : [DEFAULT_BRAND_IMAGE]);
-  const [draft, setDraft] = useState<TaskDraftValues>(() => ({ product: initialTask?.product ?? "", item: initialTask?.item ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", vendors: initialTask?.vendors ?? [] }));
+  const [draft, setDraft] = useState<TaskDraftValues>(() => ({ product: initialTask?.product ?? "", item: initialTask?.item ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", vendors: initialTask?.vendors ?? [], detailHtml: initialTask?.html ?? "" }));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
-  const generalHtml = useMemo(() => generateGeneralHtml(images), [images]);
+  const generatedHtml = useMemo(() => generateGeneralHtml(images), [images]);
+  const [isHtmlCustomized, setIsHtmlCustomized] = useState(Boolean(initialTask?.html));
+  const generalHtml = isHtmlCustomized ? draft.detailHtml : generatedHtml;
   const kurlyImages = useMemo(() => images.filter((image) => !image.excludeFromKurly), [images]);
   const sortImages = (items: ImageAsset[]) => [...items].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" }));
   const addFiles = (files: FileList | null) => {
@@ -120,13 +144,13 @@ function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2
   const toggleVendor = (vendor: string) => setDraft((current) => ({ ...current, vendors: current.vendors.includes(vendor) ? current.vendors.filter((item) => item !== vendor) : [...current.vendors, vendor] }));
   const moveImage = (fromId: string, toId: string) => setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); if (from < 0 || to < 0 || from === to) return current; const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; });
   return <div className="modal-backdrop" role="presentation"><section className={`modal ${step === 1 ? "compact" : "wide"}`} role="dialog" aria-modal="true" aria-label="새 작업 생성">
-    <header><h2><Plus {...iconProps} /> 새 작업 생성</h2><div><button className="cancel" onClick={onClose}>취소</button>{step === 1 ? <button className="primary" onClick={onNext}>HTML 생성 <ArrowRight {...iconProps} /></button> : <button className="primary" onClick={() => { onSave({ ...draft, images }); onClose(); }}>저장 <ArrowRight {...iconProps} /></button>}</div></header>
+    <header><h2><Plus {...iconProps} /> 새 작업 생성</h2><div><button className="cancel" onClick={onClose}>취소</button>{step === 1 ? <button className="primary" onClick={onNext}>HTML 생성 <ArrowRight {...iconProps} /></button> : <button className="primary" onClick={() => { onSave({ ...draft, detailHtml: generalHtml, images }); onClose(); }}>저장 <ArrowRight {...iconProps} /></button>}</div></header>
     {step === 1 ? <div className="step-one">
       <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => <button key={vendor} type="button" className={draft.vendors.includes(vendor) ? "active" : ""} aria-pressed={draft.vendors.includes(vendor)} onClick={() => toggleVendor(vendor)}>{vendor}</button>)}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /></section>
     </div> : <div className="step-two">
       <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list">{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? "drag-over" : ""}`} key={image.id} draggable onDragStart={() => setDraggedId(image.id)} onDragEnter={() => { if (draggedId && draggedId !== image.id && dragOverId !== image.id) moveImage(draggedId, image.id); setDragOverId(image.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={image.url} alt="" /><div className="file-meta"><b>{image.name}</b><small>{(image.mimeType || "image/jpeg").split("/").pop()?.toUpperCase()} · {formatBytes(image.size ?? 1_200_000)}</small></div><div className="file-actions"><label className="kurly-exclude"><input type="checkbox" checked={Boolean(image.excludeFromKurly)} onChange={() => toggleKurlyExclusion(image.id)} aria-label={`${image.name} 컬리 HTML에서 제외`} /><span>컬리 제외</span></label><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
-      <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3><div className="preview-grid"><div className="preview-box"><div className="preview-box-title">HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{images.map((image) => <div className="preview-placeholder" key={image.id}><img src={image.url} alt={image.name} /></div>)}</div></div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title">컬리 HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={image.url} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div></section>
+      <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3><div className="preview-grid"><div className="preview-box"><div className="preview-box-title">HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{images.map((image) => <div className="preview-placeholder" key={image.id}><img src={image.url} alt={image.name} /></div>)}</div></div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title">컬리 HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={image.url} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div><label className="html-editor-field">기본 HTML<textarea value={generalHtml} onChange={(event) => { setIsHtmlCustomized(true); setDraft((current) => ({ ...current, detailHtml: event.target.value })); }} /></label></section>
     </div>}
   </section></div>;
 }
@@ -197,7 +221,7 @@ export default function Home() {
   const [modal, setModal] = useState<1 | 2 | null>(null);
   const [dataGroups, setDataGroups] = useState<AssetGroup[]>([]);
   const [editingTask, setEditingTask] = useState<DetailTask | null>(null);
-  const [selectedBrand, setSelectedBrand] = useState<BrandKey>("amante");
+  const selectedBrand = useSyncExternalStore(subscribeToBrandLocation, brandFromLocation, serverBrandSnapshot);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [shareMode, setShareMode] = useState(false);
   const [shareSelection, setShareSelection] = useState<Set<string>>(() => new Set());
@@ -252,7 +276,8 @@ export default function Home() {
     document.addEventListener("pointerdown", dismiss);
     return () => { window.removeEventListener("asset-row-context-menu", open); document.removeEventListener("pointerdown", dismiss); };
   }, []);
-  const changeBrand = (brandKey: BrandKey) => { setSelectedBrand(brandKey); setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
+  const resetForBrand = () => { setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
+  const changeBrand = (brandKey: BrandKey) => { writeBrandToLocation(brandKey); resetForBrand(); window.dispatchEvent(new PopStateEvent("popstate")); };
   const enterShareMode = () => { setSelected(null); setBrandMenuOpen(false); setShareMode(true); setShareSelection(new Set()); setShareMessage(""); };
   const handleTaskSelect = (task: DetailTask) => { if (selected && taskKey(selected) === taskKey(task)) closeDetail(); else openDetail(task); };
   const confirmDelete = async () => {
@@ -295,6 +320,7 @@ export default function Home() {
       setShareMessage(error instanceof Error ? error.message : "공유 링크를 만들지 못했습니다.");
     } finally { setShareBusy(false); }
   };
+  useEffect(() => { resetForBrand(); }, [selectedBrand]);
   useEffect(() => {
     let cancelled = false;
     const load = fetch(`/api/tasks?brandKey=${selectedBrand}`).then(async (response) => { if (!response.ok) throw new Error("Supabase API unavailable"); return response.json(); }).catch(() => fetch("/data/tasks.json").then((response) => response.json()));
@@ -326,7 +352,7 @@ export default function Home() {
     {tableToast && <div className="table-copy-toast" role="status">{tableToast}</div>}
     {rowContextMenu && <div className="row-context-menu" role="menu" style={{ left: rowContextMenu.x, top: rowContextMenu.y }}><button type="button" role="menuitem" onClick={() => { setDeleteTarget(rowContextMenu.task); setRowContextMenu(null); }}><Trash2 {...iconProps} /> 삭제</button></div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation"><section className="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title"><h2 id="delete-confirm-title">행 삭제</h2><p><strong>{deleteTarget.product} {deleteTarget.item}</strong>을 삭제하시겠습니까?</p><div><button type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>아니오</button><button type="button" className="delete-confirm-button" disabled={deleteBusy} onClick={() => void confirmDelete()}>{deleteBusy ? "삭제 중..." : "예"}</button></div></section></div>}
-    {modal && <TaskModal step={modal} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={(draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: generateGeneralHtml(draft.images) }; void fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }).then(() => window.location.reload()).catch(() => undefined); }} />}
+    {modal && <TaskModal step={modal} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={(draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: draft.detailHtml }; void fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }).then(() => window.location.reload()).catch(() => undefined); }} />}
   </main>;
 }
 

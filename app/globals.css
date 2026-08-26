@@ -1493,6 +1493,34 @@ td:last-child {
 .preview-grid .preview-strip {
   width: min(400px, 100%);
 }
+.html-editor-field {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+  color: #55555b;
+  font-size: 12px;
+  font-weight: 600;
+}
+.html-editor-field textarea {
+  width: 100%;
+  height: 104px;
+  padding: 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: #fbfbfc;
+  color: #3d3d43;
+  font-family: "Wanted Sans Variable", "Wanted Sans", sans-serif;
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+}
+.html-editor-field textarea:focus {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  outline-offset: 1px;
+}
 .preview-empty {
   display: flex;
   min-height: 100%;
