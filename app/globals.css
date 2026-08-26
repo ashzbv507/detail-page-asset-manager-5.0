@@ -2627,7 +2627,7 @@ h1 {
 
 .table-shell tbody tr.product-row td,
 .table-shell tbody tr.product-row.tone-1 td {
-  background: rgba(249, 251, 253, 0.92);
+  background: rgba(255, 255, 255, 0.88);
   border-bottom: 1px solid #dee2e6;
 }
 
