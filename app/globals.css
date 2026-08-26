@@ -1157,7 +1157,7 @@ td:last-child {
   flex: none;
   width: auto;
   height: auto;
-  transform: translate(4px, 2px);
+  transform: none;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1168,16 +1168,23 @@ td:last-child {
 .brand-switcher::after {
   content: "";
   position: absolute;
-  right: -3px;
-  bottom: -2px;
+  right: -4px;
+  bottom: -4px;
   z-index: 2;
-  width: 18px;
-  height: 18px;
-  padding: 3px;
+  width: 17px;
+  height: 17px;
   border: 1px solid var(--hairline);
   border-radius: 50%;
-  background: #fff url("/figma-chevron-down.svg") center/9px no-repeat;
+  background: var(--surface) url("/figma-chevron-down.svg") center/8px no-repeat;
   box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(31, 41, 55, 0.14);
+  pointer-events: none;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.brand-switcher.is-open::after {
+  transform: rotate(180deg);
+  border-color: rgba(28, 126, 214, 0.42);
+  box-shadow: 0 1px 3px rgba(28, 126, 214, 0.18);
 }
 .brand-avatar {
   position: relative;
@@ -1193,6 +1200,17 @@ td:last-child {
   background: #fff;
   color: #fff;
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+}
+.brand-avatar:hover {
+  border-color: rgba(48, 56, 68, 0.22);
+  box-shadow: 0 5px 13px rgba(31, 41, 55, 0.14);
+}
+.brand-avatar:focus-visible {
+  outline: 2px solid rgba(28, 126, 214, 0.58);
+  outline-offset: 3px;
+}
+.brand-avatar:active {
+  transform: scale(0.97);
 }
 .brand-avatar > img {
   display: block;
