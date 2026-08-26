@@ -138,11 +138,12 @@ function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2
     const next = Array.from(files).map((file, index) => ({ id: `${file.name}-${file.lastModified}-${index}`, name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, excludeFromKurly: false }));
     const batch = next.length > 1 ? sortImages(next) : next;
     setImages((current) => [...current, ...batch]);
+    setIsHtmlCustomized(false);
   };
-  const removeImage = (id: string) => setImages((current) => current.filter((image) => image.id !== id));
+  const removeImage = (id: string) => { setImages((current) => current.filter((image) => image.id !== id)); setIsHtmlCustomized(false); };
   const toggleKurlyExclusion = (id: string) => setImages((current) => current.map((image) => image.id === id ? { ...image, excludeFromKurly: !image.excludeFromKurly } : image));
   const toggleVendor = (vendor: string) => setDraft((current) => ({ ...current, vendors: current.vendors.includes(vendor) ? current.vendors.filter((item) => item !== vendor) : [...current.vendors, vendor] }));
-  const moveImage = (fromId: string, toId: string) => setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); if (from < 0 || to < 0 || from === to) return current; const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; });
+  const moveImage = (fromId: string, toId: string) => { setIsHtmlCustomized(false); setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); if (from < 0 || to < 0 || from === to) return current; const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); };
   return <div className="modal-backdrop" role="presentation"><section className={`modal ${step === 1 ? "compact" : "wide"}`} role="dialog" aria-modal="true" aria-label="새 작업 생성">
     <header><h2><Plus {...iconProps} /> 새 작업 생성</h2><div><button className="cancel" onClick={onClose}>취소</button>{step === 1 ? <button className="primary" onClick={onNext}>HTML 생성 <ArrowRight {...iconProps} /></button> : <button className="primary" onClick={() => { onSave({ ...draft, detailHtml: generalHtml, images }); onClose(); }}>저장 <ArrowRight {...iconProps} /></button>}</div></header>
     {step === 1 ? <div className="step-one">
