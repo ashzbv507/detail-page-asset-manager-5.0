@@ -1257,11 +1257,13 @@ td:last-child {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   overflow: hidden;
+  border: 1px solid var(--hairline);
   border-radius: 50%;
-  background: #eef0f3;
+  background: var(--surface);
 }
 .brand-option-avatar > img {
   display: block;
@@ -1269,8 +1271,8 @@ td:last-child {
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-  clip-path: circle(48% at 50% 50%);
-  transform: scale(1.045);
+  clip-path: none;
+  transform: scale(1.45);
 }
 .workspace {
   position: relative;
