@@ -79,7 +79,8 @@ async function copyText(value: string) {
 }
 
 function CellCopy({ value, disabled = false }: { value: string; disabled?: boolean }) {
-  return <div className={`cell-copy ${disabled ? "is-disabled" : ""}`}><span>{value}</span><button className="copy-cell-button" type="button" disabled={disabled} aria-disabled={disabled} aria-label="셀 내용 복사" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!disabled) void copyText(value).then(() => window.dispatchEvent(new Event("asset-cell-copied"))); }}><Copy {...iconProps} /></button></div>;
+  const hasValue = Boolean(value.trim());
+  return <div className={`cell-copy ${disabled ? "is-disabled" : ""}`}><span>{hasValue ? value : ""}</span>{hasValue && <button className="copy-cell-button" type="button" disabled={disabled} aria-disabled={disabled} aria-label="셀 내용 복사" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!disabled) void copyText(value).then(() => window.dispatchEvent(new Event("asset-cell-copied"))); }}><Copy {...iconProps} /></button>}</div>;
 }
 
 function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onClose: () => void; onEdit: () => void; closing?: boolean }) {
@@ -395,8 +396,8 @@ function GroupRows({ group, onSelect, shareMode, selectedIds, onToggleShare, ton
       const isSelected = selectedIds.has(taskKey(item));
       return <tr className={`item-row ${shareMode && isSelected ? "share-selected" : ""} ${shareMode ? "share-selectable" : ""}`} key={taskKey(item)} onClick={() => shareMode ? onToggleShare(item) : onSelect(item)} onContextMenu={(event) => { if (shareMode) return; event.preventDefault(); window.dispatchEvent(new CustomEvent<RowContextMenu>("asset-row-context-menu", { detail: { task: item, x: event.clientX, y: event.clientY } })); }}>
         <td>{item.product}</td><td>{item.item}</td>
-        <td>{item.storeLink ? <a className="store-link" href={item.storeLink} target="_blank" rel="noopener noreferrer" title="자사몰 상품 열기" aria-label={`${item.product} ${item.item} 자사몰 상품 열기`} onClick={(event) => event.stopPropagation()}><ExternalLink {...iconProps} /></a> : <span className="store-link-empty">-</span>}</td>
-        <td><CellCopy value={`${item.html} ...`} disabled={shareMode} /></td><td><CellCopy value={item.thumbnailNas} disabled={shareMode} /></td><td><CellCopy value={item.detailNas} disabled={shareMode} /></td><td><CellCopy value={item.shootingNas} disabled={shareMode} /></td>
+        <td>{item.storeLink ? <a className="store-link" href={item.storeLink} target="_blank" rel="noopener noreferrer" title="자사몰 상품 열기" aria-label={`${item.product} ${item.item} 자사몰 상품 열기`} onClick={(event) => event.stopPropagation()}><ExternalLink {...iconProps} /></a> : null}</td>
+        <td><CellCopy value={item.html} disabled={shareMode} /></td><td><CellCopy value={item.thumbnailNas} disabled={shareMode} /></td><td><CellCopy value={item.detailNas} disabled={shareMode} /></td><td><CellCopy value={item.shootingNas} disabled={shareMode} /></td>
         <td><div className="table-note"><div className="vendor-badges">{(item.vendors ?? []).map((vendor) => <span className={`vendor-badge ${vendorClass(vendor)}`} key={vendor}>{vendor}</span>)}</div>{item.note && <span className="table-note-text">{item.note}</span>}</div></td>
       </tr>;
     })}
