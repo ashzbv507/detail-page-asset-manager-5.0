@@ -122,7 +122,7 @@ const DEFAULT_BRAND_IMAGE: ImageAsset = {
   mimeType: "image/jpeg",
 };
 
-function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }) => Promise<boolean>; initialTask?: DetailTask | null }) {
+function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { step: 1 | 2; brandKey: BrandKey; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }) => Promise<boolean>; initialTask?: DetailTask | null }) {
   const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : [DEFAULT_BRAND_IMAGE]);
   const [draft, setDraft] = useState<TaskDraftValues>(() => ({ product: initialTask?.product ?? "", item: initialTask?.item ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", vendors: initialTask?.vendors ?? [], detailHtml: initialTask?.html ?? "" }));
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,7 +149,7 @@ function TaskModal({ step, onClose, onNext, onSave, initialTask }: { step: 1 | 2
   return <div className="modal-backdrop" role="presentation"><section className={`modal ${step === 1 ? "compact" : "wide"}`} role="dialog" aria-modal="true" aria-label="새 작업 생성">
     <header><h2><Plus {...iconProps} /> 새 작업 생성</h2><div><button className="cancel" disabled={saving} onClick={onClose}>취소</button>{step === 1 ? <button className="primary" onClick={onNext}>HTML 생성 <ArrowRight {...iconProps} /></button> : <button className="primary" disabled={saving} onClick={() => { setSaving(true); void onSave({ ...draft, detailHtml: generalHtml, images }).then((saved) => { setSaving(false); if (saved) onClose(); }); }}>{saving ? "저장 중..." : "저장"} <ArrowRight {...iconProps} /></button>}</div></header>
     {step === 1 ? <div className="step-one">
-      <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => <button key={vendor} type="button" className={draft.vendors.includes(vendor) ? "active" : ""} aria-pressed={draft.vendors.includes(vendor)} onClick={() => toggleVendor(vendor)}>{vendor}</button>)}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
+      <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField brandKey={brandKey} value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => <button key={vendor} type="button" className={draft.vendors.includes(vendor) ? "active" : ""} aria-pressed={draft.vendors.includes(vendor)} onClick={() => toggleVendor(vendor)}>{vendor}</button>)}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /></section>
     </div> : <div className="step-two">
       <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list">{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? "drag-over" : ""}`} key={image.id} draggable onDragStart={() => setDraggedId(image.id)} onDragEnter={() => { if (draggedId && draggedId !== image.id && dragOverId !== image.id) moveImage(draggedId, image.id); setDragOverId(image.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={image.url} alt="" /><div className="file-meta"><b>{image.name}</b><small>{(image.mimeType || "image/jpeg").split("/").pop()?.toUpperCase()} · {formatBytes(image.size ?? 1_200_000)}</small></div><div className="file-actions"><label className="kurly-exclude"><input type="checkbox" checked={Boolean(image.excludeFromKurly)} onChange={() => toggleKurlyExclusion(image.id)} aria-label={`${image.name} 컬리 HTML에서 제외`} /><span>컬리 제외</span></label><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
@@ -168,19 +168,45 @@ function Field({ label, placeholder, select, value, onChange }: { label: string;
 }
 function TextArea({ label, value, onChange }: { label: string; value?: string; onChange?: (value: string) => void }) { return <label className="field"><span>{label}</span><textarea value={value} onChange={(event) => onChange?.(event.target.value)} /></label>; }
 
-const ITEM_GROUPS = [
+type ItemGroup = { label: string; items: string[] };
+
+const AMANTE_IMBEDDING_ITEM_GROUPS: ItemGroup[] = [
+  { label: "이불", items: ["차렵이불", "홑겹이불커버", "누빔이불커버", "냉감 여름이불", "냉감 홑이불", "극세사 차렵이불", "간절기 차렵이불", "자가발열 차렵이불"] },
+  { label: "베개커버", items: ["2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
+  { label: "패드/매트커버", items: ["침대패드", "냉감 침대패드", "극세사 침대패드", "홑겹매트커버", "누빔매트커버", "방수 매트커버"] },
+  { label: "기타", items: ["토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "담요", "냉감 토퍼", "이불 겸 패드"] },
+];
+
+const SERENDIMENT_ITEM_GROUPS: ItemGroup[] = [
   { label: "이불", items: ["차렵이불", "홑겹이불커버", "누빔이불커버", "냉감 여름이불", "냉감 홑이불", "극세사 차렵이불", "간절기 차렵이불", "자가발열 차렵이불"] },
   { label: "베개커버", items: ["2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
   { label: "패드/매트커버", items: ["침대패드", "냉감 침대패드", "극세사 침대패드", "홑겹매트커버", "누빔매트커버", "방수 매트커버"] },
   { label: "기타", items: ["토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "냉감 토퍼", "이불 겸 패드"] },
-] as const;
+];
 
-const ITEM_ORDER = new Map<string, number>(ITEM_GROUPS.flatMap((group) => group.items).map((item, index) => [item, index]));
+const SOMMIER_ITEM_GROUPS: ItemGroup[] = [
+  { label: "이불", items: ["차렵이불", "홑겹이불커버", "누빔이불커버", "냉감 여름이불", "냉감 홑이불", "극세사 차렵이불", "간절기 차렵이불", "자가발열 차렵이불"] },
+  { label: "베개커버", items: ["2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
+  { label: "패드/매트커버", items: ["침대패드", "냉감 침대패드", "극세사 침대패드", "홑겹매트커버", "누빔매트커버", "방수 매트커버"] },
+  { label: "기타", items: ["토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "냉감 토퍼", "이불 겸 패드"] },
+];
 
-function sortTasksByItemOrder(tasks: DetailTask[]) {
+const ITEM_GROUPS_BY_BRAND: Record<BrandKey, ItemGroup[]> = {
+  amante: AMANTE_IMBEDDING_ITEM_GROUPS,
+  imbedding: AMANTE_IMBEDDING_ITEM_GROUPS,
+  serendiment: SERENDIMENT_ITEM_GROUPS,
+  sommier: SOMMIER_ITEM_GROUPS,
+};
+
+function itemGroupsForBrand(brandKey: BrandKey) {
+  return ITEM_GROUPS_BY_BRAND[brandKey];
+}
+
+function sortTasksByItemOrder(tasks: DetailTask[], brandKey: BrandKey) {
+  const itemOrder = new Map<string, number>(itemGroupsForBrand(brandKey).flatMap((group) => group.items).map((item, index) => [item, index]));
   return [...tasks].sort((left, right) => {
-    const leftOrder = ITEM_ORDER.get(left.item);
-    const rightOrder = ITEM_ORDER.get(right.item);
+    const leftOrder = itemOrder.get(left.item);
+    const rightOrder = itemOrder.get(right.item);
     if (leftOrder !== undefined && rightOrder !== undefined) return leftOrder - rightOrder;
     if (leftOrder !== undefined) return -1;
     if (rightOrder !== undefined) return 1;
@@ -204,10 +230,10 @@ function matchesItem(value: string, query: string) {
   return normalizedValue.includes(normalizedQuery) || getHangulInitials(value).replace(/\s+/g, "").includes(normalizedQuery);
 }
 
-function ItemSelectField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function ItemSelectField({ brandKey, value, onChange }: { brandKey: BrandKey; value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const fieldRef = useRef<HTMLDivElement>(null);
-  const filteredGroups = ITEM_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => matchesItem(item, value)) })).filter((group) => group.items.length > 0);
+  const filteredGroups = itemGroupsForBrand(brandKey).map((group) => ({ ...group, items: group.items.filter((item) => matchesItem(item, value)) })).filter((group) => group.items.length > 0);
   useEffect(() => {
     const close = (event: PointerEvent) => { if (event.target instanceof Node && !fieldRef.current?.contains(event.target)) setOpen(false); };
     document.addEventListener("pointerdown", close);
@@ -334,7 +360,7 @@ export default function Home() {
       tasks.forEach((task) => { const item: DetailTask = { id: task.id, brandKey: task.brandKey, product: task.productName, item: task.itemName, html: task.detailHtml || generateGeneralHtml(task.images ?? []), storeLink: task.storeLink, vendors: task.vendors, note: task.note, images: task.images, thumbnailNas: task.thumbnailNas, detailNas: task.detailNas }; const groupLabel = productGroupLabel(item.product, item.brandKey); const entries = grouped.get(groupLabel) ?? []; entries.push(item); grouped.set(groupLabel, entries); });
       if (!cancelled) {
         setDataGroups([...grouped.entries()]
-          .map(([product, items]) => ({ product, count: items.length, items: sortTasksByItemOrder(items) }))
+          .map(([product, items]) => ({ product, count: items.length, items: sortTasksByItemOrder(items, selectedBrand) }))
           .sort((left, right) => left.product.localeCompare(right.product, "ko-KR")));
       }
     }).catch(() => undefined);
@@ -355,7 +381,7 @@ export default function Home() {
     {tableToast && <div className="table-copy-toast" role="status">{tableToast}</div>}
     {rowContextMenu && <div className="row-context-menu" role="menu" style={{ left: rowContextMenu.x, top: rowContextMenu.y }}><button type="button" role="menuitem" onClick={() => { setDeleteTarget(rowContextMenu.task); setRowContextMenu(null); }}><Trash2 {...iconProps} /> 삭제</button></div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation"><section className="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title"><h2 id="delete-confirm-title">행 삭제</h2><p><strong>{deleteTarget.product} {deleteTarget.item}</strong>을 삭제하시겠습니까?</p><div><button type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>아니오</button><button type="button" className="delete-confirm-button" disabled={deleteBusy} onClick={() => void confirmDelete()}>{deleteBusy ? "삭제 중..." : "예"}</button></div></section></div>}
-    {modal && <TaskModal step={modal} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={async (draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: draft.detailHtml }; try { const response = await fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }); if (!response.ok) { const body = await response.json().catch(() => null) as { error?: string } | null; throw new Error(body?.error || "저장에 실패했습니다."); } window.location.reload(); return true; } catch (error) { setTableToast(error instanceof Error ? error.message : "저장에 실패했습니다."); return false; } }} />}
+    {modal && <TaskModal step={modal} brandKey={selectedBrand} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={async (draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, images: draft.images, detailHtml: draft.detailHtml }; try { const response = await fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }); if (!response.ok) { const body = await response.json().catch(() => null) as { error?: string } | null; throw new Error(body?.error || "저장에 실패했습니다."); } window.location.reload(); return true; } catch (error) { setTableToast(error instanceof Error ? error.message : "저장에 실패했습니다."); return false; } }} />}
   </main>;
 }
 
