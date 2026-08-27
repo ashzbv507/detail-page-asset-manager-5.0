@@ -2551,6 +2551,62 @@ h1 {
   color: var(--subtle);
 }
 
+/* Brand picker: keep the logo, title and disclosure affordance on one clear axis. */
+.brand-heading {
+  gap: 16px;
+}
+.brand-switcher:not(.share-brand-switcher) {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+}
+.brand-switcher:not(.share-brand-switcher)::after {
+  display: none;
+}
+.brand-avatar {
+  width: 56px;
+  height: 56px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.brand-avatar > img {
+  width: 52px;
+  height: 52px;
+  margin: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 3px 10px rgba(31, 41, 55, 0.1);
+}
+.brand-avatar > svg {
+  display: block;
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  padding: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--subtle);
+  box-shadow: 0 2px 5px rgba(31, 41, 55, 0.12);
+  transition: transform 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.brand-avatar:hover > img {
+  border-color: rgba(48, 56, 68, 0.25);
+  box-shadow: 0 5px 13px rgba(31, 41, 55, 0.14);
+}
+.brand-switcher.is-open .brand-avatar > svg {
+  transform: rotate(180deg);
+  border-color: rgba(28, 126, 214, 0.42);
+  color: var(--accent);
+  box-shadow: 0 2px 5px rgba(28, 126, 214, 0.18);
+}
+
 .search {
   border-color: rgba(48, 56, 68, 0.14);
   border-radius: 10px;
