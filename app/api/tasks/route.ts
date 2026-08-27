@@ -1,4 +1,5 @@
 import { buildImageUrl } from "../../lib/html";
+import type { BrandKey } from "../../lib/task-types";
 
 type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
 
@@ -47,9 +48,9 @@ function filenameFrom(value: string) {
   try { return decodeURIComponent(filename); } catch { return filename; }
 }
 
-function storedImageUrl(image: ImagePayload) {
+function storedImageUrl(image: ImagePayload, brandKey: BrandKey) {
   const filename = text(image.name) || filenameFrom(text(image.url));
-  return filename ? `${buildImageUrl(filename)}${image.excludeFromKurly ? KURLY_EXCLUDE_MARKER : ""}` : "";
+  return filename ? `${buildImageUrl(filename, brandKey)}${image.excludeFromKurly ? KURLY_EXCLUDE_MARKER : ""}` : "";
 }
 
 function config() {
@@ -67,8 +68,9 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
 function toRow(payload: TaskPayload): DatabaseRow {
   const productName = text(payload.productName); const itemName = text(payload.itemName);
   if (!productName || !itemName) throw new Error("제품명과 품목은 필수입니다.");
-  const images = Array.isArray(payload.images) ? payload.images.map(storedImageUrl).filter(Boolean) : list(payload.imageUrls);
-  return { id: text(payload.id) || crypto.randomUUID(), brand_key: brand(payload.brandKey), product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), shooting_nas: text(payload.shootingNas), vendors: list(payload.vendors), note: text(payload.note) };
+  const brandKey = brand(payload.brandKey) as BrandKey;
+  const images = Array.isArray(payload.images) ? payload.images.map((image) => storedImageUrl(image, brandKey)).filter(Boolean) : list(payload.imageUrls);
+  return { id: text(payload.id) || crypto.randomUUID(), brand_key: brandKey, product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), shooting_nas: text(payload.shootingNas), vendors: list(payload.vendors), note: text(payload.note) };
 }
 function toClient(row: DatabaseRow) {
   const images = (row.image_urls ?? []).map((storedUrl, index) => {

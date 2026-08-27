@@ -90,7 +90,7 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const images = task.images ?? [];
   const activeImages = htmlPanelMode === "general" ? images : images.filter((image) => !image.excludeFromKurly);
-  const activeHtml = htmlPanelMode === "general" ? task.html || generateGeneralHtml(activeImages) : generateGeneralHtml(activeImages);
+  const activeHtml = htmlPanelMode === "general" ? task.html || generateGeneralHtml(activeImages, task.brandKey) : generateGeneralHtml(activeImages, task.brandKey);
   const displayedHtmlLinks = htmlMode === "html" ? activeHtml.split("\n").filter(Boolean) : [...activeHtml.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id, task.item, task.product]);
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
@@ -125,14 +125,14 @@ const DEFAULT_BRAND_IMAGE: ImageAsset = {
 };
 
 function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { step: 1 | 2; brandKey: BrandKey; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }) => Promise<boolean>; initialTask?: DetailTask | null }) {
-  const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : [DEFAULT_BRAND_IMAGE]);
+  const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : brandKey === "amante" ? [DEFAULT_BRAND_IMAGE] : []);
   const [draft, setDraft] = useState<TaskDraftValues>(() => ({ product: initialTask?.product ?? "", item: initialTask?.item ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", shootingNas: initialTask?.shootingNas ?? "", vendors: initialTask?.vendors ?? [], detailHtml: initialTask?.html ?? "" }));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
   const [saving, setSaving] = useState(false);
-  const generatedHtml = useMemo(() => generateGeneralHtml(images), [images]);
+  const generatedHtml = useMemo(() => generateGeneralHtml(images, brandKey), [images, brandKey]);
   const [isHtmlCustomized, setIsHtmlCustomized] = useState(Boolean(initialTask?.html));
   const generalHtml = isHtmlCustomized ? draft.detailHtml : generatedHtml;
   const kurlyImages = useMemo(() => images.filter((image) => !image.excludeFromKurly), [images]);
@@ -359,7 +359,7 @@ export default function Home() {
       const tasks = payload.tasks?.filter((task) => task.brandKey === selectedBrand);
       if (cancelled || !tasks?.length) return;
       const grouped = new Map<string, DetailTask[]>();
-      tasks.forEach((task) => { const item: DetailTask = { id: task.id, brandKey: task.brandKey, product: task.productName, item: task.itemName, html: task.detailHtml || generateGeneralHtml(task.images ?? []), storeLink: task.storeLink, vendors: task.vendors, note: task.note, images: task.images, thumbnailNas: task.thumbnailNas, detailNas: task.detailNas, shootingNas: task.shootingNas ?? "" }; const groupLabel = productGroupLabel(item.product, item.brandKey); const entries = grouped.get(groupLabel) ?? []; entries.push(item); grouped.set(groupLabel, entries); });
+      tasks.forEach((task) => { const item: DetailTask = { id: task.id, brandKey: task.brandKey, product: task.productName, item: task.itemName, html: task.detailHtml || generateGeneralHtml(task.images ?? [], task.brandKey), storeLink: task.storeLink, vendors: task.vendors, note: task.note, images: task.images, thumbnailNas: task.thumbnailNas, detailNas: task.detailNas, shootingNas: task.shootingNas ?? "" }; const groupLabel = productGroupLabel(item.product, item.brandKey); const entries = grouped.get(groupLabel) ?? []; entries.push(item); grouped.set(groupLabel, entries); });
       if (!cancelled) {
         setDataGroups([...grouped.entries()]
           .map(([product, items]) => ({ product, count: items.length, items: sortTasksByItemOrder(items, selectedBrand) }))

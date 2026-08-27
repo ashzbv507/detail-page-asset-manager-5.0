@@ -1,6 +1,17 @@
-import type { AssetImage } from "./task-types";
+import type { AssetImage, BrandKey } from "./task-types";
 
-export function buildImageUrl(filename: string) {
+type ImageUrlRule = { baseUrl: string; quote: "'" | '"' };
+
+// The two confirmed production CDN rules. Serendiment and Sommier retain the
+// existing image host until their separate CDN URL rule is provided.
+const IMAGE_URL_RULES: Record<BrandKey, ImageUrlRule> = {
+  amante: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
+  imbedding: { baseUrl: "http://img.imbedding.co.kr/images/", quote: '"' },
+  serendiment: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
+  sommier: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
+};
+
+export function buildImageUrl(filename: string, brandKey: BrandKey = "amante") {
   const rawName = filename.trim().split("/").pop()?.split(/[?#]/)[0] ?? filename;
   let normalizedName = rawName;
 
@@ -10,15 +21,16 @@ export function buildImageUrl(filename: string) {
     // Keep an unexpected filename intact instead of failing HTML generation.
   }
 
-  return `https://img.amante.co.kr/images/ani_img/${encodeURIComponent(normalizedName)}`;
+  return `${IMAGE_URL_RULES[brandKey].baseUrl}${encodeURIComponent(normalizedName)}`;
 }
 
-export function generateGeneralHtml(images: AssetImage[]) {
+export function generateGeneralHtml(images: AssetImage[], brandKey: BrandKey = "amante") {
+  const { quote } = IMAGE_URL_RULES[brandKey];
   return images
-    .map((image) => `<img src='${buildImageUrl(image.name)}'>`)
+    .map((image) => `<img src=${quote}${buildImageUrl(image.name, brandKey)}${quote}>`)
     .join("\n");
 }
 
-export function htmlForImages(images: AssetImage[]) {
-  return generateGeneralHtml(images);
+export function htmlForImages(images: AssetImage[], brandKey: BrandKey = "amante") {
+  return generateGeneralHtml(images, brandKey);
 }
