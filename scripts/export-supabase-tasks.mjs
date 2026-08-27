@@ -9,14 +9,14 @@ const baseUrl = env.SUPABASE_URL?.replace(/\/$/, "");
 const secret = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 if (!baseUrl || !secret) throw new Error(".env.local에 Supabase 설정이 없습니다.");
 
-const response = await fetch(`${baseUrl}/rest/v1/asset_tasks?select=id,brand_key,product_name,item_name,option_name,store_link,image_urls,detail_html,thumbnail_nas,detail_nas,vendors,note&order=created_at.asc`, {
+const response = await fetch(`${baseUrl}/rest/v1/asset_tasks?select=id,brand_key,product_name,item_name,option_name,store_link,image_urls,detail_html,thumbnail_nas,detail_nas,shooting_nas,vendors,note&order=created_at.asc`, {
   headers: { apikey: secret, Authorization: `Bearer ${secret}` },
 });
 if (!response.ok) throw new Error(`Supabase 조회 실패: ${response.status}`);
 const rows = await response.json();
 const tasks = rows.map((row) => {
   const images = (row.image_urls ?? []).map((url, index) => ({ id: `${row.id}-image-${index}-${Buffer.from(url).toString("base64url").slice(0, 10)}`, name: url.split("/").pop() || `image-${index + 1}`, url }));
-  return { id: row.id, brandKey: row.brand_key, productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", detailHtml: row.detail_html ?? "" };
+  return { id: row.id, brandKey: row.brand_key, productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", detailHtml: row.detail_html ?? "" };
 });
 
 const output = resolve("public/data/tasks.json");

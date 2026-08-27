@@ -14,6 +14,7 @@ type TaskPayload = {
   detailHtml?: string;
   thumbnailNas?: string;
   detailNas?: string;
+  shootingNas?: string;
   vendors?: string[];
   note?: string;
 };
@@ -29,6 +30,7 @@ type DatabaseRow = {
   detail_html: string;
   thumbnail_nas: string;
   detail_nas: string;
+  shooting_nas: string;
   vendors: string[];
   note: string;
 };
@@ -66,7 +68,7 @@ function toRow(payload: TaskPayload): DatabaseRow {
   const productName = text(payload.productName); const itemName = text(payload.itemName);
   if (!productName || !itemName) throw new Error("제품명과 품목은 필수입니다.");
   const images = Array.isArray(payload.images) ? payload.images.map(storedImageUrl).filter(Boolean) : list(payload.imageUrls);
-  return { id: text(payload.id) || crypto.randomUUID(), brand_key: brand(payload.brandKey), product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), vendors: list(payload.vendors), note: text(payload.note) };
+  return { id: text(payload.id) || crypto.randomUUID(), brand_key: brand(payload.brandKey), product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), shooting_nas: text(payload.shootingNas), vendors: list(payload.vendors), note: text(payload.note) };
 }
 function toClient(row: DatabaseRow) {
   const images = (row.image_urls ?? []).map((storedUrl, index) => {
@@ -74,7 +76,7 @@ function toClient(row: DatabaseRow) {
     const url = excludeFromKurly ? storedUrl.slice(0, -KURLY_EXCLUDE_MARKER.length) : storedUrl;
     return { id: `${row.id}-image-${index}-${Buffer.from(storedUrl).toString("base64url").slice(0, 10)}`, name: filenameFrom(url) || `image-${index + 1}`, url, excludeFromKurly };
   });
-  return { id: row.id, brandKey: brand(row.brand_key), productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", detailHtml: row.detail_html ?? "" };
+  return { id: row.id, brandKey: brand(row.brand_key), productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", detailHtml: row.detail_html ?? "" };
 }
 function failure(error: unknown) { const message = error instanceof Error ? error.message : "Supabase 연결 중 오류가 발생했습니다."; return Response.json({ error: message }, { status: message.includes("환경 변수") ? 503 : message.includes("필수") ? 400 : 502 }); }
 
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
   try {
     const brandKey = text(new URL(request.url).searchParams.get("brandKey"));
     const filter = brandKey ? `&brand_key=eq.${encodeURIComponent(brandKey)}` : "";
-    const response = await supabaseRequest(`asset_tasks?select=id,brand_key,product_name,item_name,option_name,store_link,image_urls,detail_html,thumbnail_nas,detail_nas,vendors,note&order=created_at.asc${filter}`);
+    const response = await supabaseRequest(`asset_tasks?select=id,brand_key,product_name,item_name,option_name,store_link,image_urls,detail_html,thumbnail_nas,detail_nas,shooting_nas,vendors,note&order=created_at.asc${filter}`);
     return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
   } catch (error) { return failure(error); }
 }

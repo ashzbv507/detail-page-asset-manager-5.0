@@ -22,6 +22,7 @@ export type AssetTask = {
   note: string;
   thumbnailNas: string;
   detailNas: string;
+  shootingNas: string;
   images: AssetImage[];
 };
 
