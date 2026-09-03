@@ -24,6 +24,23 @@ export function buildImageUrl(filename: string, brandKey: BrandKey = "amante") {
   return `${IMAGE_URL_RULES[brandKey].baseUrl}${encodeURIComponent(normalizedName)}`;
 }
 
+/**
+ * Keeps a preview request separate from the HTML that is saved or copied.
+ * A new version makes the browser fetch the current remote image again while
+ * leaving the original image URL (and therefore the production HTML) intact.
+ */
+export function withPreviewImageVersion(url: string, version: number) {
+  if (!url || /^(?:blob:|data:)/i.test(url)) return url;
+
+  try {
+    const previewUrl = new URL(url);
+    previewUrl.searchParams.set("preview", String(version));
+    return previewUrl.toString();
+  } catch {
+    return url;
+  }
+}
+
 export function generateGeneralHtml(images: AssetImage[], brandKey: BrandKey = "amante") {
   const { quote } = IMAGE_URL_RULES[brandKey];
   return images
