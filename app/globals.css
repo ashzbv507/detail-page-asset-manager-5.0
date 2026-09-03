@@ -2136,6 +2136,60 @@ td:last-child {
   font-size: var(--body-size);
   font-weight: 400;
 }
+.modal .html-edit {
+  color: var(--body);
+  font-weight: 600;
+}
+.modal > header > .modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal > header .modal-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 78px;
+  height: 36px;
+  margin: 0;
+  padding: 0 13px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: -0.13px;
+  white-space: nowrap;
+}
+.modal > header .modal-action > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 2;
+}
+.modal > header .modal-action-secondary {
+  background: var(--canvas);
+  color: var(--body);
+}
+.modal > header .modal-action-secondary:hover:not(:disabled) {
+  border-color: #c7cbd3;
+  background: #f5f6f8;
+}
+.modal > header .modal-action-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-button);
+}
+.modal > header .modal-action-primary:hover:not(:disabled) {
+  border-color: #006fe6;
+  background: #006fe6;
+}
+.modal > header .modal-action:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
 .modal .primary {
   font-size: var(--body-size);
   font-weight: 700;

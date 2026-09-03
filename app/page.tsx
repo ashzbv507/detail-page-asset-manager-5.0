@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeftRight, ArrowRight, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
 import { generateGeneralHtml, withPreviewImageVersion } from "./lib/html";
 import { productGroupLabel } from "./lib/product-grouping";
 
@@ -153,8 +153,15 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const toggleKurlyExclusion = (id: string) => { setImages((current) => current.map((image) => image.id === id ? { ...image, excludeFromKurly: !image.excludeFromKurly } : image)); refreshImagePreviews(); };
   const toggleVendor = (vendor: string) => setDraft((current) => ({ ...current, vendors: current.vendors.includes(vendor) ? current.vendors.filter((item) => item !== vendor) : [...current.vendors, vendor] }));
   const moveImage = (fromId: string, toId: string) => { setIsHtmlCustomized(false); setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); if (from < 0 || to < 0 || from === to) return current; const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); refreshImagePreviews(); };
+  const saveTask = () => {
+    setSaving(true);
+    void onSave({ ...draft, detailHtml: generalHtml, images }).then((saved) => {
+      setSaving(false);
+      if (saved) onClose();
+    });
+  };
   return <div className="modal-backdrop" role="presentation"><section className={`modal ${step === 1 ? "compact" : "wide"}`} role="dialog" aria-modal="true" aria-label="새 작업 생성">
-    <header><h2><Plus {...iconProps} /> 새 작업 생성</h2><div><button className="cancel" disabled={saving} onClick={onClose}>취소</button>{step === 1 ? <button className="primary" onClick={onNext}>HTML 생성 <ArrowRight {...iconProps} /></button> : <button className="primary" disabled={saving} onClick={() => { setSaving(true); void onSave({ ...draft, detailHtml: generalHtml, images }).then((saved) => { setSaving(false); if (saved) onClose(); }); }}>{saving ? "저장 중..." : "저장"} <ArrowRight {...iconProps} /></button>}</div></header>
+    <header><h2><Plus {...iconProps} /> {initialTask ? "작업 편집" : "새 작업 생성"}</h2><div className="modal-actions"><button className="modal-action modal-action-secondary" disabled={saving} onClick={onClose}>취소 <X {...iconProps} /></button>{step === 1 ? <><button className="modal-action modal-action-secondary" disabled={saving} onClick={onNext}>{initialTask ? "HTML 편집" : "HTML 생성"} <ArrowRight {...iconProps} /></button>{initialTask && <button className="modal-action modal-action-primary" disabled={saving} onClick={saveTask}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</> : <button className="modal-action modal-action-primary" disabled={saving} onClick={saveTask}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</div></header>
     {step === 1 ? <div className="step-one">
       <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField brandKey={brandKey} value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => <button key={vendor} type="button" className={draft.vendors.includes(vendor) ? "active" : ""} aria-pressed={draft.vendors.includes(vendor)} onClick={() => toggleVendor(vendor)}>{vendor}</button>)}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /><TextArea label="촬영본 NAS 경로" value={draft.shootingNas} onChange={(value) => setDraft((current) => ({ ...current, shootingNas: value }))} /></section>
