@@ -2,11 +2,11 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, ChevronDown, ChevronRight, Copy, ExternalLink, X } from "lucide-react";
-import { generateGeneralHtml } from "../../lib/html";
+import { generateGeneralHtml, generateKurlyHtml } from "../../lib/html";
 import { productGroupLabel } from "../../lib/product-grouping";
-import type { BrandKey } from "../../lib/task-types";
+import type { AssetImage, BrandKey } from "../../lib/task-types";
 
-type SharedImage = { id: string; name: string; url: string; excludeFromKurly?: boolean };
+type SharedImage = AssetImage;
 type SharedTask = { id: string; brandKey?: BrandKey; product: string; item: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: SharedImage[] };
 
 const BRAND_IMAGES: Record<string, string> = { amante: "/brands/amante.png", imbedding: "/brands/imbedding.png", serendiment: "/brands/serendiment.png", sommier: "/brands/sommier.png" };
@@ -34,9 +34,8 @@ function SharedDetailPanel({ task, onClose }: { task: SharedTask; onClose: () =>
   const [htmlMode, setHtmlMode] = useState<"html" | "url">("html");
   const [htmlPanelMode, setHtmlPanelMode] = useState<"general" | "kurly">("general");
   const images = task.images ?? [];
-  const activeImages = htmlPanelMode === "general" ? images : images.filter((image) => !image.excludeFromKurly);
-  const html = htmlPanelMode === "general" ? (task.html || generateGeneralHtml(activeImages, task.brandKey)) : generateGeneralHtml(activeImages, task.brandKey);
-  const displayed = htmlMode === "html" ? html.split("\n").filter(Boolean) : activeImages.map((image) => image.url ?? "").filter(Boolean);
+  const html = htmlPanelMode === "general" ? (task.html || generateGeneralHtml(images, task.brandKey)) : generateKurlyHtml(images, task.brandKey);
+  const displayed = htmlMode === "html" ? html.split("\n").filter(Boolean) : [...html.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id]);
   return <aside className="detail-panel saved-detail-panel share-detail-panel">
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X size={16} /></button></div>

@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
-import { generateGeneralHtml, withPreviewImageVersion } from "./lib/html";
+import { generateGeneralHtml, generateKurlyHtml, withPreviewImageVersion } from "./lib/html";
 import { productGroupLabel } from "./lib/product-grouping";
+import { getImageHtmlTarget, imagesForHtmlTarget } from "./lib/image-target";
+import type { AssetImage, ImageHtmlTarget } from "./lib/task-types";
+import { ImageTargetSelect } from "./components/ImageTargetSelect";
 
 type DetailTask = {
   id?: string;
@@ -22,7 +25,7 @@ type DetailTask = {
 
 type RowContextMenu = { task: DetailTask; x: number; y: number };
 
-type ImageAsset = { id: string; name: string; url: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
+type ImageAsset = AssetImage;
 type AssetGroup = { product: string; count: number; items?: DetailTask[] };
 
 function taskKey(task: DetailTask) {
@@ -89,8 +92,7 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
   const [toastMessage, setToastMessage] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const images = task.images ?? [];
-  const activeImages = htmlPanelMode === "general" ? images : images.filter((image) => !image.excludeFromKurly);
-  const activeHtml = htmlPanelMode === "general" ? task.html || generateGeneralHtml(activeImages, task.brandKey) : generateGeneralHtml(activeImages, task.brandKey);
+  const activeHtml = htmlPanelMode === "general" ? task.html || generateGeneralHtml(images, task.brandKey) : generateKurlyHtml(images, task.brandKey);
   const displayedHtmlLinks = htmlMode === "html" ? activeHtml.split("\n").filter(Boolean) : [...activeHtml.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id, task.item, task.product]);
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
@@ -138,19 +140,27 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const generatedHtml = useMemo(() => generateGeneralHtml(images, brandKey), [images, brandKey]);
   const [isHtmlCustomized, setIsHtmlCustomized] = useState(Boolean(initialTask?.html));
   const generalHtml = isHtmlCustomized ? draft.detailHtml : generatedHtml;
-  const kurlyImages = useMemo(() => images.filter((image) => !image.excludeFromKurly), [images]);
+  const generalImages = useMemo(() => imagesForHtmlTarget(images, "general"), [images]);
+  const kurlyImages = useMemo(() => imagesForHtmlTarget(images, "kurly"), [images]);
   const refreshImagePreviews = () => setPreviewVersion((current) => current + 1);
   const sortImages = (items: ImageAsset[]) => [...items].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" }));
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    const next = Array.from(files).map((file, index) => ({ id: `${file.name}-${file.lastModified}-${index}`, name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, excludeFromKurly: false }));
+    const next = Array.from(files).map((file, index) => ({ id: `${file.name}-${file.lastModified}-${index}`, name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, htmlTarget: "common" as const }));
     const batch = next.length > 1 ? sortImages(next) : next;
     setImages((current) => [...current, ...batch]);
     setIsHtmlCustomized(false);
     refreshImagePreviews();
   };
   const removeImage = (id: string) => { setImages((current) => current.filter((image) => image.id !== id)); setIsHtmlCustomized(false); refreshImagePreviews(); };
-  const toggleKurlyExclusion = (id: string) => { setImages((current) => current.map((image) => image.id === id ? { ...image, excludeFromKurly: !image.excludeFromKurly } : image)); refreshImagePreviews(); };
+  const changeImageTarget = (id: string, htmlTarget: ImageHtmlTarget) => {
+    const image = images.find((entry) => entry.id === id);
+    if (!image || getImageHtmlTarget(image) === htmlTarget) return;
+    // Only rebuild a customized general HTML when its image membership changes.
+    if (getImageHtmlTarget(image) === "kurly" || htmlTarget === "kurly") setIsHtmlCustomized(false);
+    setImages((current) => current.map((entry) => entry.id === id ? { ...entry, htmlTarget, excludeFromKurly: htmlTarget === "general" } : entry));
+    refreshImagePreviews();
+  };
   const toggleVendor = (vendor: string) => setDraft((current) => ({ ...current, vendors: current.vendors.includes(vendor) ? current.vendors.filter((item) => item !== vendor) : [...current.vendors, vendor] }));
   const moveImage = (fromId: string, toId: string) => { setIsHtmlCustomized(false); setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); if (from < 0 || to < 0 || from === to) return current; const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); refreshImagePreviews(); };
   const saveTask = () => {
@@ -166,8 +176,8 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
       <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField brandKey={brandKey} value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => <button key={vendor} type="button" className={draft.vendors.includes(vendor) ? "active" : ""} aria-pressed={draft.vendors.includes(vendor)} onClick={() => toggleVendor(vendor)}>{vendor}</button>)}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /><TextArea label="촬영본 NAS 경로" value={draft.shootingNas} onChange={(value) => setDraft((current) => ({ ...current, shootingNas: value }))} /></section>
     </div> : <div className="step-two">
-      <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list">{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? "drag-over" : ""}`} key={image.id} draggable onDragStart={() => setDraggedId(image.id)} onDragEnter={() => { if (draggedId && draggedId !== image.id && dragOverId !== image.id) moveImage(draggedId, image.id); setDragOverId(image.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={withPreviewImageVersion(image.url, previewVersion)} alt="" /><div className="file-meta"><b>{image.name}</b><small>{(image.mimeType || "image/jpeg").split("/").pop()?.toUpperCase()} · {formatBytes(image.size ?? 1_200_000)}</small></div><div className="file-actions"><label className="kurly-exclude"><input type="checkbox" checked={Boolean(image.excludeFromKurly)} onChange={() => toggleKurlyExclusion(image.id)} aria-label={`${image.name} 컬리 HTML에서 제외`} /><span>컬리 제외</span></label><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
-      <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3><div className="preview-grid"><div className="preview-box"><div className="preview-box-title">HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{images.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div></div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title">컬리 HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div><label className="html-editor-field">기본 HTML<textarea value={generalHtml} onChange={(event) => { setIsHtmlCustomized(true); setDraft((current) => ({ ...current, detailHtml: event.target.value })); }} onBlur={refreshImagePreviews} /></label></section>
+      <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list">{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? "drag-over" : ""}`} key={image.id} draggable onDragStart={() => setDraggedId(image.id)} onDragEnter={() => { if (draggedId && draggedId !== image.id && dragOverId !== image.id) moveImage(draggedId, image.id); setDragOverId(image.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={withPreviewImageVersion(image.url, previewVersion)} alt="" /><div className="file-meta"><b>{image.name}</b><small>{(image.mimeType || "image/jpeg").split("/").pop()?.toUpperCase()} · {formatBytes(image.size ?? 1_200_000)}</small></div><div className="file-actions"><ImageTargetSelect value={getImageHtmlTarget(image)} imageName={image.name} onChange={(target) => changeImageTarget(image.id, target)} /><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
+      <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3><div className="preview-grid"><div className="preview-box"><div className="preview-box-title">HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{generalImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{generalImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title">컬리 HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div><label className="html-editor-field">기본 HTML<textarea value={generalHtml} onChange={(event) => { setIsHtmlCustomized(true); setDraft((current) => ({ ...current, detailHtml: event.target.value })); }} onBlur={refreshImagePreviews} /></label></section>
     </div>}
   </section></div>;
 }

@@ -1,4 +1,5 @@
 import type { AssetImage, BrandKey } from "./task-types";
+import { imagesForHtmlTarget } from "./image-target";
 
 type ImageUrlRule = { baseUrl: string; quote: "'" | '"' };
 
@@ -41,11 +42,19 @@ export function withPreviewImageVersion(url: string, version: number) {
   }
 }
 
-export function generateGeneralHtml(images: AssetImage[], brandKey: BrandKey = "amante") {
+function generateHtml(images: AssetImage[], brandKey: BrandKey) {
   const { quote } = IMAGE_URL_RULES[brandKey];
   return images
     .map((image) => `<img src=${quote}${buildImageUrl(image.name, brandKey)}${quote}>`)
     .join("\n");
+}
+
+export function generateGeneralHtml(images: AssetImage[], brandKey: BrandKey = "amante") {
+  return generateHtml(imagesForHtmlTarget(images, "general"), brandKey);
+}
+
+export function generateKurlyHtml(images: AssetImage[], brandKey: BrandKey = "amante") {
+  return generateHtml(imagesForHtmlTarget(images, "kurly"), brandKey);
 }
 
 export function htmlForImages(images: AssetImage[], brandKey: BrandKey = "amante") {

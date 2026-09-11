@@ -1,11 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
+import { decodeStoredImageUrl, getImageHtmlTarget } from "../../lib/image-target";
+import type { AssetImage } from "../../lib/task-types";
 
-type ShareImage = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
+type ShareImage = Partial<AssetImage>;
 type ShareTask = { id?: string; brandKey?: string; product?: string; item?: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: ShareImage[] };
 type ShareRecord = { tokenHash: string; tasks: ShareTask[]; createdAt: string; expiresAt: string };
 type DatabaseTask = { id: string; brand_key: string; product_name: string; item_name: string; store_link: string; image_urls: string[]; detail_html: string; thumbnail_nas: string; detail_nas: string; shooting_nas: string; vendors: string[]; note: string };
 
-const KURLY_EXCLUDE_MARKER = "#kurly-excluded";
 const PERMANENT_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
 
 function tokenHash(token: string) {
@@ -40,7 +41,7 @@ function normalizeTask(task: ShareTask): ShareTask | null {
     thumbnailNas: task.thumbnailNas ?? "",
     detailNas: task.detailNas ?? "",
     shootingNas: task.shootingNas ?? "",
-    images: Array.isArray(task.images) ? task.images.filter((image) => image?.url).map((image) => ({ id: image.id, name: image.name, url: image.url, mimeType: image.mimeType, size: image.size, excludeFromKurly: image.excludeFromKurly })) : [],
+    images: Array.isArray(task.images) ? task.images.filter((image) => image?.url).map((image) => ({ id: image.id, name: image.name, url: image.url, mimeType: image.mimeType, size: image.size, htmlTarget: getImageHtmlTarget(image), excludeFromKurly: getImageHtmlTarget(image) === "general" })) : [],
   };
 }
 
@@ -51,9 +52,8 @@ function filenameFrom(value: string) {
 
 function toSharedTask(row: DatabaseTask): ShareTask {
   const images = (row.image_urls ?? []).map((storedUrl, index) => {
-    const excludeFromKurly = storedUrl.endsWith(KURLY_EXCLUDE_MARKER);
-    const url = excludeFromKurly ? storedUrl.slice(0, -KURLY_EXCLUDE_MARKER.length) : storedUrl;
-    return { id: `${row.id}-image-${index}`, name: filenameFrom(url) || `image-${index + 1}`, url, excludeFromKurly };
+    const decoded = decodeStoredImageUrl(storedUrl);
+    return { id: `${row.id}-image-${index}`, name: filenameFrom(decoded.url) || `image-${index + 1}`, ...decoded };
   });
   return { id: row.id, brandKey: row.brand_key, product: row.product_name, item: row.item_name, html: row.detail_html ?? "", storeLink: row.store_link ?? "", vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", images };
 }

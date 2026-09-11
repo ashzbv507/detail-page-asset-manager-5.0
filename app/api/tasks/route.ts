@@ -1,7 +1,8 @@
 import { buildImageUrl } from "../../lib/html";
-import type { BrandKey } from "../../lib/task-types";
+import { decodeStoredImageUrl, encodeStoredImageUrl } from "../../lib/image-target";
+import type { BrandKey, ImageHtmlTarget } from "../../lib/task-types";
 
-type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; excludeFromKurly?: boolean };
+type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; htmlTarget?: ImageHtmlTarget; excludeFromKurly?: boolean };
 
 type TaskPayload = {
   id?: string;
@@ -41,7 +42,6 @@ const BRAND_KEYS = ["amante", "imbedding", "serendiment", "sommier"] as const;
 function text(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function list(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : []; }
 function brand(value: unknown) { const key = text(value); return BRAND_KEYS.includes(key as typeof BRAND_KEYS[number]) ? key : "amante"; }
-const KURLY_EXCLUDE_MARKER = "#kurly-excluded";
 
 function filenameFrom(value: string) {
   const filename = value.split("/").pop()?.split(/[?#]/)[0] ?? "";
@@ -50,7 +50,7 @@ function filenameFrom(value: string) {
 
 function storedImageUrl(image: ImagePayload, brandKey: BrandKey) {
   const filename = text(image.name) || filenameFrom(text(image.url));
-  return filename ? `${buildImageUrl(filename, brandKey)}${image.excludeFromKurly ? KURLY_EXCLUDE_MARKER : ""}` : "";
+  return filename ? encodeStoredImageUrl(buildImageUrl(filename, brandKey), image) : "";
 }
 
 function config() {
@@ -74,9 +74,8 @@ function toRow(payload: TaskPayload): DatabaseRow {
 }
 function toClient(row: DatabaseRow) {
   const images = (row.image_urls ?? []).map((storedUrl, index) => {
-    const excludeFromKurly = storedUrl.endsWith(KURLY_EXCLUDE_MARKER);
-    const url = excludeFromKurly ? storedUrl.slice(0, -KURLY_EXCLUDE_MARKER.length) : storedUrl;
-    return { id: `${row.id}-image-${index}-${Buffer.from(storedUrl).toString("base64url").slice(0, 10)}`, name: filenameFrom(url) || `image-${index + 1}`, url, excludeFromKurly };
+    const decoded = decodeStoredImageUrl(storedUrl);
+    return { id: `${row.id}-image-${index}-${Buffer.from(storedUrl).toString("base64url").slice(0, 10)}`, name: filenameFrom(decoded.url) || `image-${index + 1}`, ...decoded };
   });
   return { id: row.id, brandKey: brand(row.brand_key), productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", detailHtml: row.detail_html ?? "" };
 }

@@ -2,12 +2,16 @@ export const BRAND_KEYS = ["amante", "imbedding", "serendiment", "sommier"] as c
 
 export type BrandKey = (typeof BRAND_KEYS)[number];
 
+export type ImageHtmlTarget = "common" | "general" | "kurly";
+
 export type AssetImage = {
   id: string;
   name: string;
   url: string;
   mimeType?: string;
   size?: number;
+  htmlTarget?: ImageHtmlTarget;
+  // Retained for tasks and share snapshots saved before the target menu.
   excludeFromKurly?: boolean;
 };
 
