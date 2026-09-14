@@ -92,10 +92,18 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { task?: TaskPayload; tasks?: TaskPayload[] };
+    const body = await request.json() as { task?: TaskPayload; tasks?: TaskPayload[]; overwrite?: boolean };
     const payload = body.tasks ?? (body.task ? [body.task] : []);
     if (!payload.length) return Response.json({ error: "저장할 작업 데이터가 없습니다." }, { status: 400 });
-    const response = await supabaseRequest(`asset_tasks?on_conflict=brand_key,product_name,item_name,option_name`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(payload.map(toRow)) });
+    const rows = payload.map(toRow);
+    if (body.task) {
+      const row = rows[0];
+      const duplicateResponse = await supabaseRequest(`asset_tasks?select=id&brand_key=eq.${encodeURIComponent(row.brand_key)}&product_name=eq.${encodeURIComponent(row.product_name)}&item_name=eq.${encodeURIComponent(row.item_name)}&option_name=eq.${encodeURIComponent(row.option_name)}&limit=1`);
+      const duplicate = (await duplicateResponse.json() as Array<{ id: string }>)[0];
+      if (duplicate && !body.overwrite) return Response.json({ error: "동일한 작업이 이미 있습니다.", code: "DUPLICATE_TASK" }, { status: 409 });
+      if (duplicate) rows[0] = { ...row, id: duplicate.id };
+    }
+    const response = await supabaseRequest(`asset_tasks?on_conflict=brand_key,product_name,item_name,option_name`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(rows) });
     return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
   } catch (error) { return failure(error); }
 }

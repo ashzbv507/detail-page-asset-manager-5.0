@@ -8,6 +8,8 @@ import { getImageHtmlTarget, imagesForHtmlTarget } from "./lib/image-target";
 import type { AssetImage, ImageHtmlTarget } from "./lib/task-types";
 import { ImageTargetSelect } from "./components/ImageTargetSelect";
 import { HtmlCodeDrawer } from "./components/HtmlCodeDrawer";
+import { matchesTaskSearch, normalizeSearch } from "./lib/task-search";
+import { mergeSavedTask } from "./lib/task-state";
 
 type DetailTask = {
   id?: string;
@@ -115,7 +117,8 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
 }
 
 function PathRow({ label, value, onCopied }: { label: string; value: string; onCopied: (message: string) => void }) {
-  return <div className="path-row"><label>{label}</label><div>{value}</div><button type="button" data-tooltip={`${label} 경로 복사`} aria-label={`${label} 경로 복사`} onClick={() => void copyText(value).then(() => onCopied("복사되었습니다."))}><Copy className="copy-icon" {...iconProps} /> 복사</button></div>;
+  const hasValue = Boolean(value.trim());
+  return <div className="path-row"><label>{label}</label><div>{value}</div>{hasValue && <button type="button" data-tooltip={`${label} 경로 복사`} aria-label={`${label} 경로 복사`} onClick={() => void copyText(value).then(() => onCopied("복사되었습니다."))}><Copy className="copy-icon" {...iconProps} /> 복사</button>}</div>;
 }
 
 type TaskDraftValues = { product: string; item: string; storeLink: string; note: string; thumbnailNas: string; detailNas: string; shootingNas: string; vendors: string[]; detailHtml: string };
@@ -127,7 +130,33 @@ const DEFAULT_BRAND_IMAGE: ImageAsset = {
   mimeType: "image/jpeg",
 };
 
-function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { step: 1 | 2; brandKey: BrandKey; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }) => Promise<boolean>; initialTask?: DetailTask | null }) {
+function DiscardChangesDialog({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
+  return <dialog ref={ref} className="discard-changes-dialog" aria-labelledby="discard-title" aria-describedby="discard-description"
+    onCancel={(event) => { event.preventDefault(); onKeep(); }}>
+    <h2 id="discard-title">저장하지 않은 변경사항을 버릴까요?</h2>
+    <p id="discard-description">이번에 입력하거나 수정한 내용만 사라집니다. 기존에 저장된 자산은 유지됩니다.</p>
+    <div><button type="button" className="modal-action modal-action-secondary" autoFocus onClick={onKeep}>계속 편집</button>
+      <button type="button" className="modal-action modal-action-primary" onClick={onDiscard}>변경사항 버리기</button></div>
+  </dialog>;
+}
+
+function OverwriteTaskDialog({ product, item, onCancel, onOverwrite }: { product: string; item: string; onCancel: () => void; onOverwrite: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
+  return <dialog ref={ref} className="discard-changes-dialog" aria-labelledby="overwrite-title" aria-describedby="overwrite-description"
+    onCancel={(event) => { event.preventDefault(); onCancel(); }}>
+    <h2 id="overwrite-title">동일한 작업이 이미 있습니다.</h2>
+    <p id="overwrite-description"><strong>{product} · {item}</strong>의 기존 내용을 새 내용으로 덮어쓰시겠습니까?</p>
+    <div><button type="button" className="modal-action modal-action-secondary" autoFocus onClick={onCancel}>계속 편집</button>
+      <button type="button" className="modal-action modal-action-primary" onClick={onOverwrite}>덮어쓰기</button></div>
+  </dialog>;
+}
+
+type SaveResult = "saved" | "duplicate" | "failed";
+
+function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { step: 1 | 2; brandKey: BrandKey; onClose: () => void; onNext: () => void; onSave: (draft: TaskDraftValues & { images: ImageAsset[] }, overwrite: boolean) => Promise<SaveResult>; initialTask?: DetailTask | null }) {
   const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : brandKey === "amante" ? [DEFAULT_BRAND_IMAGE] : []);
   const [draft, setDraft] = useState<TaskDraftValues>(() => ({ product: initialTask?.product ?? "", item: initialTask?.item ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", shootingNas: initialTask?.shootingNas ?? "", vendors: initialTask?.vendors ?? [], detailHtml: initialTask?.html ?? "" }));
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -135,12 +164,26 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+  const [initialValues] = useState(() => JSON.stringify({ draft, images }));
+  const dirty = useMemo(() => JSON.stringify({ draft, images }) !== initialValues, [draft, images, initialValues]);
+  const requestClose = () => { if (!savingRef.current) { if (dirty) setConfirmDiscard(true); else onClose(); } };
+  useEffect(() => {
+    if (!dirty && !saving) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty, saving]);
   // This version is only used for <img> elements in this editor. It is never
   // included in the generated HTML that is saved, displayed, or copied.
   const [previewVersion, setPreviewVersion] = useState(() => Date.now());
   const generatedHtml = useMemo(() => generateGeneralHtml(images, brandKey), [images, brandKey]);
-  const [isHtmlCustomized, setIsHtmlCustomized] = useState(Boolean(initialTask?.html));
-  const generalHtml = isHtmlCustomized ? draft.detailHtml : generatedHtml;
+  // Preserve legacy stored HTML until the user actually changes the image list.
+  const [preserveStoredHtml, setPreserveStoredHtml] = useState(Boolean(initialTask?.html));
+  const generalHtml = preserveStoredHtml ? draft.detailHtml : generatedHtml;
   const generalImages = useMemo(() => imagesForHtmlTarget(images, "general"), [images]);
   const kurlyImages = useMemo(() => imagesForHtmlTarget(images, "kurly"), [images]);
   const refreshImagePreviews = () => setPreviewVersion((current) => current + 1);
@@ -150,45 +193,58 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
     const next = Array.from(files).map((file, index) => ({ id: `${file.name}-${file.lastModified}-${index}`, name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, htmlTarget: "common" as const }));
     const batch = next.length > 1 ? sortImages(next) : next;
     setImages((current) => [...current, ...batch]);
-    setIsHtmlCustomized(false);
+    setPreserveStoredHtml(false);
     refreshImagePreviews();
   };
-  const removeImage = (id: string) => { setImages((current) => current.filter((image) => image.id !== id)); setIsHtmlCustomized(false); refreshImagePreviews(); };
+  const removeImage = (id: string) => { setImages((current) => current.filter((image) => image.id !== id)); setPreserveStoredHtml(false); refreshImagePreviews(); };
   const changeImageTarget = (id: string, htmlTarget: ImageHtmlTarget) => {
     const image = images.find((entry) => entry.id === id);
     if (!image || getImageHtmlTarget(image) === htmlTarget) return;
-    // Only rebuild a customized general HTML when its image membership changes.
-    if (getImageHtmlTarget(image) === "kurly" || htmlTarget === "kurly") setIsHtmlCustomized(false);
+    setPreserveStoredHtml(false);
     setImages((current) => current.map((entry) => entry.id === id ? { ...entry, htmlTarget, excludeFromKurly: htmlTarget === "general" } : entry));
     refreshImagePreviews();
   };
   const toggleVendor = (vendor: string) => setDraft((current) => ({ ...current, vendors: current.vendors.includes(vendor) ? current.vendors.filter((item) => item !== vendor) : [...current.vendors, vendor] }));
-  const moveImage = (fromId: string, toId: string) => { setIsHtmlCustomized(false); setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); if (from < 0 || to < 0 || from === to) return current; const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); refreshImagePreviews(); };
-  const saveTask = () => {
+  const moveImage = (fromId: string, toId: string) => { if (fromId === toId || !images.some((image) => image.id === fromId) || !images.some((image) => image.id === toId)) return; setPreserveStoredHtml(false); setImages((current) => { const from = current.findIndex((image) => image.id === fromId); const to = current.findIndex((image) => image.id === toId); const next = [...current]; const [moved] = next.splice(from, 1); next.splice(to, 0, moved); return next; }); refreshImagePreviews(); };
+  const saveTask = async (overwrite = false) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
-    void onSave({ ...draft, detailHtml: generalHtml, images }).then((saved) => {
-      setSaving(false);
-      if (saved) onClose();
-    });
+    setSaveError("");
+    try {
+      const result = await onSave({ ...draft, detailHtml: generalHtml, images }, overwrite);
+      if (result === "saved") onClose();
+      else if (result === "duplicate") setConfirmOverwrite(true);
+      else setSaveError("저장하지 못했습니다. 입력 내용은 유지되어 있으니 다시 시도해 주세요.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "저장하지 못했습니다. 다시 시도해 주세요.");
+    } finally { savingRef.current = false; setSaving(false); }
   };
   return <div className="modal-backdrop" role="presentation"><section className={`modal ${step === 1 ? "compact" : "wide"}`} role="dialog" aria-modal="true" aria-label="새 작업 생성">
-    <header><h2><Plus {...iconProps} /> {initialTask ? "작업 편집" : "새 작업 생성"}</h2><div className="modal-actions"><button className="modal-action modal-action-secondary" disabled={saving} onClick={onClose}>취소 <X {...iconProps} /></button>{step === 1 ? <><button className="modal-action modal-action-secondary" disabled={saving} onClick={onNext}>{initialTask ? "HTML 편집" : "HTML 생성"} <ArrowRight {...iconProps} /></button>{initialTask && <button className="modal-action modal-action-primary" disabled={saving} onClick={saveTask}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</> : <button className="modal-action modal-action-primary" disabled={saving} onClick={saveTask}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</div></header>
+    <header><h2><Plus {...iconProps} /> {initialTask ? "작업 편집" : "새 작업 생성"}</h2><div className="modal-actions"><button className="modal-action modal-action-secondary" disabled={saving} onClick={requestClose}>취소 <X {...iconProps} /></button>{step === 1 ? <><button className="modal-action modal-action-secondary" disabled={saving} onClick={onNext}>{initialTask ? "HTML 편집" : "HTML 생성"} <ArrowRight {...iconProps} /></button>{initialTask && <button className="modal-action modal-action-primary" disabled={saving} onClick={() => void saveTask()}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</> : <button className="modal-action modal-action-primary" disabled={saving} onClick={() => void saveTask()}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</div></header>
     {step === 1 ? <div className="step-one">
       <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField brandKey={brandKey} value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => <button key={vendor} type="button" className={draft.vendors.includes(vendor) ? "active" : ""} aria-pressed={draft.vendors.includes(vendor)} onClick={() => toggleVendor(vendor)}>{vendor}</button>)}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /><TextArea label="촬영본 NAS 경로" value={draft.shootingNas} onChange={(value) => setDraft((current) => ({ ...current, shootingNas: value }))} /></section>
     </div> : <div className="step-two">
-      <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list">{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? "drag-over" : ""}`} key={image.id} draggable onDragStart={() => setDraggedId(image.id)} onDragEnter={() => { if (draggedId && draggedId !== image.id && dragOverId !== image.id) moveImage(draggedId, image.id); setDragOverId(image.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={withPreviewImageVersion(image.url, previewVersion)} alt="" /><div className="file-meta"><b title={image.name}>{image.name}</b><small>{(image.mimeType || "image/jpeg").split("/").pop()?.toUpperCase()} · {formatBytes(image.size ?? 1_200_000)}</small></div><div className="file-actions"><ImageTargetSelect value={getImageHtmlTarget(image)} imageName={image.name} onChange={(target) => changeImageTarget(image.id, target)} /><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
+      <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list">{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? "drag-over" : ""}`} key={image.id} draggable onDragStart={() => setDraggedId(image.id)} onDragEnter={() => { if (draggedId && draggedId !== image.id && dragOverId !== image.id) moveImage(draggedId, image.id); setDragOverId(image.id); }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={withPreviewImageVersion(image.url, previewVersion)} alt="" /><div className="file-meta"><b title={image.name}>{image.name}</b>{imageMetadata(image) && <small>{imageMetadata(image)}</small>}</div><div className="file-actions"><ImageTargetSelect value={getImageHtmlTarget(image)} imageName={image.name} onChange={(target) => changeImageTarget(image.id, target)} /><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
       <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3><div className="preview-grid"><div className="preview-box"><div className="preview-box-title">HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{generalImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{generalImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title">컬리 HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div></section>
       <HtmlCodeDrawer generalHtml={generalHtml} kurlyHtml={generateKurlyHtml(images, brandKey)}
-        onGeneralChange={(value) => { setIsHtmlCustomized(true); setDraft((current) => ({ ...current, detailHtml: value })); }}
-        onGeneralBlur={refreshImagePreviews} onCopy={copyText} />
+        onCopy={copyText} />
     </div>}
-  </section></div>;
+    {saveError && <div className="modal-save-error" role="alert">{saveError}</div>}
+  </section>{confirmDiscard && <DiscardChangesDialog onKeep={() => setConfirmDiscard(false)} onDiscard={onClose} />}
+    {confirmOverwrite && <OverwriteTaskDialog product={draft.product || "새 작업"} item={draft.item || "미분류"} onCancel={() => setConfirmOverwrite(false)} onOverwrite={() => { setConfirmOverwrite(false); void saveTask(true); }} />}</div>;
 }
 
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function imageMetadata(image: ImageAsset) {
+  const values = [image.mimeType?.split("/").pop()?.toUpperCase()];
+  if (typeof image.size === "number") values.push(formatBytes(image.size));
+  return values.filter(Boolean).join(" · ");
 }
 
 function Field({ label, placeholder, select, value, onChange }: { label: string; placeholder?: string; select?: boolean; value?: string; onChange?: (value: string) => void }) {
@@ -277,6 +333,8 @@ export default function Home() {
   const detailCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [modal, setModal] = useState<1 | 2 | null>(null);
   const [dataGroups, setDataGroups] = useState<AssetGroup[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadKey, setReloadKey] = useState(0);
   const [editingTask, setEditingTask] = useState<DetailTask | null>(null);
   const selectedBrand = useSyncExternalStore(subscribeToBrandLocation, brandFromLocation, serverBrandSnapshot);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
@@ -291,7 +349,15 @@ export default function Home() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const activeBrand = BRANDS.find((brand) => brand.key === selectedBrand) ?? BRANDS[0];
   const allTasks = useMemo(() => dataGroups.flatMap((group) => group.items ?? []), [dataGroups]);
-  const shownGroups = useMemo(() => dataGroups.filter(({ product, items }) => !query || `${product} ${items?.flatMap((item) => [item.product, item.item]).join(" ") ?? ""}`.toLowerCase().includes(query.toLowerCase())), [dataGroups, query]);
+  const searchActive = Boolean(normalizeSearch(query));
+  const shownGroups = useMemo(() => {
+    if (!normalizeSearch(query)) return dataGroups;
+    return dataGroups.flatMap((group) => {
+      const items = (group.items ?? []).filter((item) => matchesTaskSearch(item, query, group.product));
+      return items.length ? [{ ...group, items, count: items.length }] : [];
+    });
+  }, [dataGroups, query]);
+  const shownTaskCount = shownGroups.reduce((total, group) => total + (group.items?.length ?? 0), 0);
   const openDetail = (task: DetailTask) => {
     if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current);
     detailCloseTimerRef.current = null;
@@ -337,8 +403,11 @@ export default function Home() {
     document.addEventListener("pointerdown", dismiss);
     return () => { window.removeEventListener("asset-row-context-menu", open); document.removeEventListener("pointerdown", dismiss); };
   }, []);
-  const resetForBrand = () => { setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
-  const changeBrand = (brandKey: BrandKey) => { writeBrandToLocation(brandKey); resetForBrand(); window.dispatchEvent(new PopStateEvent("popstate")); };
+  const resetForBrand = () => { setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setLoadState("loading"); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
+  const changeBrand = (brandKey: BrandKey) => {
+    if (brandKey === selectedBrand) { setBrandMenuOpen(false); return; }
+    writeBrandToLocation(brandKey); resetForBrand(); window.dispatchEvent(new PopStateEvent("popstate"));
+  };
   const enterShareMode = () => { setSelected(null); setBrandMenuOpen(false); setShareMode(true); setShareSelection(new Set()); setShareMessage(""); };
   const handleTaskSelect = (task: DetailTask) => { if (selected && taskKey(selected) === taskKey(task)) closeDetail(); else openDetail(task); };
   const confirmDelete = async () => {
@@ -384,20 +453,31 @@ export default function Home() {
   useEffect(() => { resetForBrand(); }, [selectedBrand]);
   useEffect(() => {
     let cancelled = false;
-    const load = fetch(`/api/tasks?brandKey=${selectedBrand}`).then(async (response) => { if (!response.ok) throw new Error("Supabase API unavailable"); return response.json(); }).catch(() => fetch("/data/tasks.json").then((response) => response.json()));
-    load.then((payload: { tasks?: Array<{ id: string; brandKey: BrandKey; productName: string; itemName: string; detailHtml?: string; images?: ImageAsset[]; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas: string; detailNas: string; shootingNas?: string }> }) => {
-      const tasks = payload.tasks?.filter((task) => task.brandKey === selectedBrand);
-      if (cancelled || !tasks?.length) return;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    setLoadState("loading");
+    fetch(`/api/tasks?brandKey=${selectedBrand}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("목록 조회 실패");
+        return response.json();
+      })
+      .then((payload: { tasks?: Array<{ id: string; brandKey: BrandKey; productName: string; itemName: string; detailHtml?: string; images?: ImageAsset[]; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas: string; detailNas: string; shootingNas?: string }> }) => {
+      if (cancelled) return;
+      if (!Array.isArray(payload.tasks)) throw new Error("잘못된 목록 응답");
+      const tasks = payload.tasks.filter((task) => task.brandKey === selectedBrand);
       const grouped = new Map<string, DetailTask[]>();
       tasks.forEach((task) => { const item: DetailTask = { id: task.id, brandKey: task.brandKey, product: task.productName, item: task.itemName, html: task.detailHtml || generateGeneralHtml(task.images ?? [], task.brandKey), storeLink: task.storeLink, vendors: task.vendors, note: task.note, images: task.images, thumbnailNas: task.thumbnailNas, detailNas: task.detailNas, shootingNas: task.shootingNas ?? "" }; const groupLabel = productGroupLabel(item.product, item.brandKey); const entries = grouped.get(groupLabel) ?? []; entries.push(item); grouped.set(groupLabel, entries); });
       if (!cancelled) {
         setDataGroups([...grouped.entries()]
           .map(([product, items]) => ({ product, count: items.length, items: sortTasksByItemOrder(items, selectedBrand) }))
           .sort((left, right) => left.product.localeCompare(right.product, "ko-KR")));
+        setLoadState("ready");
       }
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [selectedBrand]);
+    }).catch(() => {
+      if (!cancelled) { setDataGroups([]); setLoadState("error"); }
+    }).finally(() => clearTimeout(timeout));
+    return () => { cancelled = true; clearTimeout(timeout); controller.abort(); };
+  }, [selectedBrand, reloadKey]);
   useEffect(() => {
     if (!selected) return;
     const closeOnOutside = (event: PointerEvent) => {
@@ -408,17 +488,22 @@ export default function Home() {
     return () => document.removeEventListener("pointerdown", closeOnOutside, true);
   }, [selected]);
   return <main className={`${modal ? "modal-open " : ""}brand-${selectedBrand}`.trim()}>
-    <header className="app-header"><div className="brand-heading"><div className={`brand-switcher ${brandMenuOpen && !modal ? "is-open" : ""}`}><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품명, 품목, 경로 검색" aria-label="검색" /></label><button className="new-task" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
-    <div className={`workspace ${selected ? "with-detail" : ""}`}><section className="table-shell" onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th><th>링크</th><th>HTML / URL</th><th>썸네일 NAS</th><th>상세페이지 NAS</th><th>촬영본 NAS</th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{shownGroups.map((group, index) => <GroupRows group={group} key={group.product} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer className={shareMode ? "share-mode-footer" : undefined}>{shareMode ? <div className="share-selection-hint"><span>자산 행을 선택하세요</span><b>{shareSelection.size}개 선택됨</b></div> : <span className="table-summary">제품 {dataGroups.length}개 · 품목 {dataGroups.reduce((total, group) => total + (group.items?.length ?? 0), 0)}개</span>}{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}{shareMode ? <div className="share-actions"><button type="button" className="share-cancel" disabled={shareBusy} onClick={finishShareMode}>취소</button><button type="button" className="share-copy-button" disabled={shareBusy || shareSelection.size === 0} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : "링크 복사"}</span></button></div> : <button type="button" className="share-button" disabled={shareBusy} onClick={enterShareMode}><Share2 {...iconProps} /><span>공유</span></button>}</footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
+    <header className="app-header"><div className="brand-heading"><div className={`brand-switcher ${brandMenuOpen && !modal ? "is-open" : ""}`}><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품명, 품목, NAS, HTML·링크 검색" aria-label="검색" /></label><button className="new-task" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
+    <div className={`workspace ${selected ? "with-detail" : ""}`}><section className="table-shell" onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th><th>링크</th><th>HTML / URL</th><th>썸네일 NAS</th><th>상세페이지 NAS</th><th>촬영본 NAS</th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/><col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{loadState !== "ready" || shownGroups.length === 0 ? <tr><td colSpan={8}><div className="table-state" role={loadState === "error" ? "alert" : "status"}>
+      <strong>{loadState === "loading" ? "자산 목록을 불러오고 있습니다." : loadState === "error" ? "자산 목록을 불러오지 못했습니다." : searchActive ? "검색 결과가 없습니다." : `${activeBrand.name}에 등록된 자산이 없습니다.`}</strong>
+      <p>{loadState === "loading" ? "잠시만 기다려 주세요." : loadState === "error" ? "네트워크 연결을 확인한 뒤 다시 시도해 주세요." : searchActive ? "제품명, 품목, NAS 경로 또는 HTML·링크로 다시 검색해 보세요." : "새 작업 등록 버튼으로 첫 자산을 추가해 주세요."}</p>
+      {loadState === "error" && <button type="button" onClick={() => setReloadKey((current) => current + 1)}>다시 시도</button>}
+      {loadState === "ready" && searchActive && <button type="button" onClick={() => setQuery("")}>검색 초기화</button>}
+    </div></td></tr> : shownGroups.map((group, index) => <GroupRows group={group} key={`${selectedBrand}:${group.product}:${searchActive}`} initiallyExpanded={searchActive} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer className={shareMode ? "share-mode-footer" : undefined}>{shareMode ? <div className="share-selection-hint"><span>자산 행을 선택하세요</span><b>{shareSelection.size}개 선택됨</b></div> : <span className="table-summary" role="status">{loadState === "loading" ? "불러오는 중…" : loadState === "error" ? "목록 조회 실패" : searchActive ? `검색 결과: 제품 ${shownGroups.length}개 · 품목 ${shownTaskCount}개 / 전체 품목 ${allTasks.length}개` : `제품 ${dataGroups.length}개 · 품목 ${allTasks.length}개`}</span>}{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}{shareMode ? <div className="share-actions"><button type="button" className="share-cancel" disabled={shareBusy} onClick={finishShareMode}>취소</button><button type="button" className="share-copy-button" disabled={shareBusy || shareSelection.size === 0} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : "링크 복사"}</span></button></div> : <button type="button" className="share-button" disabled={shareBusy || loadState !== "ready" || allTasks.length === 0} onClick={enterShareMode}><Share2 {...iconProps} /><span>공유</span></button>}</footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
     {tableToast && <div className="table-copy-toast" role="status">{tableToast}</div>}
     {rowContextMenu && <div className="row-context-menu" role="menu" style={{ left: rowContextMenu.x, top: rowContextMenu.y }}><button type="button" role="menuitem" onClick={() => { setDeleteTarget(rowContextMenu.task); setRowContextMenu(null); }}><Trash2 {...iconProps} /> 삭제</button></div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation"><section className="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title"><h2 id="delete-confirm-title">행 삭제</h2><p><strong>{deleteTarget.product} {deleteTarget.item}</strong>을 삭제하시겠습니까?</p><div><button type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>아니오</button><button type="button" className="delete-confirm-button" disabled={deleteBusy} onClick={() => void confirmDelete()}>{deleteBusy ? "삭제 중..." : "예"}</button></div></section></div>}
-    {modal && <TaskModal step={modal} brandKey={selectedBrand} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={async (draft) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, shootingNas: draft.shootingNas, images: draft.images, detailHtml: draft.detailHtml }; try { const response = await fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload }) }); if (!response.ok) { const body = await response.json().catch(() => null) as { error?: string } | null; throw new Error(body?.error || "저장에 실패했습니다."); } window.location.reload(); return true; } catch (error) { setTableToast(error instanceof Error ? error.message : "저장에 실패했습니다."); return false; } }} />}
+    {modal && <TaskModal step={modal} brandKey={selectedBrand} initialTask={editingTask} onClose={() => { setModal(null); setEditingTask(null); }} onNext={() => setModal(2)} onSave={async (draft, overwrite) => { const payload = { brandKey: selectedBrand, id: editingTask?.id, productName: draft.product || "새 작업", itemName: draft.item || "미분류", storeLink: draft.storeLink, vendors: draft.vendors, note: draft.note, thumbnailNas: draft.thumbnailNas, detailNas: draft.detailNas, shootingNas: draft.shootingNas, images: draft.images, detailHtml: draft.detailHtml }; try { const response = await fetch(editingTask?.id ? `/api/tasks?id=${encodeURIComponent(editingTask.id)}` : "/api/tasks", { method: editingTask?.id ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: payload, overwrite }) }); const body = await response.json().catch(() => null) as { error?: string; code?: string; tasks?: Array<{ id: string; brandKey: BrandKey; productName: string; itemName: string; detailHtml?: string; images?: ImageAsset[]; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas: string; detailNas: string; shootingNas?: string }> } | null; if (response.status === 409 && body?.code === "DUPLICATE_TASK") return "duplicate"; if (!response.ok) throw new Error(body?.error || "저장에 실패했습니다."); const stored = body?.tasks?.[0]; if (!stored) throw new Error("저장 결과를 확인하지 못했습니다."); const savedTask: DetailTask = { id: stored.id, brandKey: stored.brandKey, product: stored.productName, item: stored.itemName, html: stored.detailHtml || generateGeneralHtml(stored.images ?? [], stored.brandKey), storeLink: stored.storeLink, vendors: stored.vendors, note: stored.note, images: stored.images, thumbnailNas: stored.thumbnailNas, detailNas: stored.detailNas, shootingNas: stored.shootingNas ?? "" }; setDataGroups((current) => mergeSavedTask(current, savedTask, productGroupLabel(savedTask.product, savedTask.brandKey), (items) => sortTasksByItemOrder(items, selectedBrand))); if (editingTask) setSelected(savedTask); setTableToast("저장되었습니다."); if (tableToastTimerRef.current) clearTimeout(tableToastTimerRef.current); tableToastTimerRef.current = setTimeout(() => setTableToast(""), 1800); return "saved"; } catch (error) { setTableToast(error instanceof Error ? error.message : "저장에 실패했습니다."); return "failed"; } }} />}
   </main>;
 }
 
-function GroupRows({ group, onSelect, shareMode, selectedIds, onToggleShare, tone }: { group: AssetGroup; onSelect: (task: DetailTask) => void; shareMode: boolean; selectedIds: Set<string>; onToggleShare: (task: DetailTask) => void; tone: number }) {
-  const [expanded, setExpanded] = useState(false);
+function GroupRows({ group, onSelect, shareMode, selectedIds, onToggleShare, tone, initiallyExpanded = false }: { initiallyExpanded?: boolean; group: AssetGroup; onSelect: (task: DetailTask) => void; shareMode: boolean; selectedIds: Set<string>; onToggleShare: (task: DetailTask) => void; tone: number }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const toggleExpanded = () => setExpanded((current) => !current);
   return <>
     <tr className={`product-row tone-${tone}`} onClick={toggleExpanded}><td><button className="expand" aria-label={`${group.product} 하위 품목 ${expanded ? "접기" : "펼치기"}`} onClick={(event) => { event.stopPropagation(); toggleExpanded(); }}>{expanded ? <ChevronDown {...iconProps} /> : <ChevronRight {...iconProps} />}</button><b>{group.product}</b></td><td><span className="count">{group.count}개</span></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>

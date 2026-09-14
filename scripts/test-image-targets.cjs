@@ -60,6 +60,33 @@ test('existing exclusions, URL markers, and every target transition remain compa
   assert.equal(url, 'https://example.invalid/photo.jpg');
 });
 
+test('single create requires explicit confirmation before overwriting a duplicate', async (t) => {
+  const previousEnv = { url: process.env.SUPABASE_URL, secret: process.env.SUPABASE_SECRET_KEY };
+  process.env.SUPABASE_URL = 'https://test-database.invalid';
+  process.env.SUPABASE_SECRET_KEY = 'test-only';
+  t.after(() => {
+    for (const [key, value] of [['SUPABASE_URL', previousEnv.url], ['SUPABASE_SECRET_KEY', previousEnv.secret]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  let writeCount = 0;
+  let writtenRows = [];
+  t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
+    if (String(url).includes('limit=1')) return Response.json([{ id: 'existing-id' }]);
+    if (init.method === 'POST') { writeCount += 1; writtenRows = JSON.parse(init.body); return Response.json(writtenRows); }
+    return Response.json([]);
+  });
+  const payload = { brandKey: 'amante', productName: 'Duplicate', itemName: '차렵이불', images: [] };
+  const blocked = await tasksRoute.POST(new Request('http://localhost/api/tasks', { method: 'POST', body: JSON.stringify({ task: payload }) }));
+  assert.equal(blocked.status, 409);
+  assert.equal((await blocked.json()).code, 'DUPLICATE_TASK');
+  assert.equal(writeCount, 0);
+  const overwritten = await tasksRoute.POST(new Request('http://localhost/api/tasks', { method: 'POST', body: JSON.stringify({ task: payload, overwrite: true }) }));
+  assert.equal(overwritten.status, 200);
+  assert.equal(writeCount, 1);
+  assert.equal(writtenRows[0].id, 'existing-id');
+});
+
 test('create, edit, reload, and live/legacy shares retain targets without leaking storage markers', async (t) => {
   const previousEnv = { url: process.env.SUPABASE_URL, secret: process.env.SUPABASE_SECRET_KEY };
   process.env.SUPABASE_URL = 'https://test-database.invalid';
@@ -74,6 +101,7 @@ test('create, edit, reload, and live/legacy shares retain targets without leakin
   t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
     assert.equal(new URL(url).origin, 'https://test-database.invalid');
     if (String(url).includes('/asset_shares?')) return Response.json([{ snapshot_data: snapshot }]);
+    if (String(url).includes('limit=1')) return Response.json([]);
     if (init.method === 'POST') savedRows = JSON.parse(init.body);
     if (init.method === 'PATCH') savedRows = [JSON.parse(init.body)];
     return Response.json(savedRows);

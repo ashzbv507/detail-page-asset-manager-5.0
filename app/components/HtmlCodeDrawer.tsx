@@ -6,12 +6,10 @@ import { Check, Code2, Copy, X } from "lucide-react";
 type Props = {
   generalHtml: string;
   kurlyHtml: string;
-  onGeneralChange: (value: string) => void;
-  onGeneralBlur: () => void;
   onCopy: (value: string) => Promise<void>;
 };
 
-export function HtmlCodeDrawer({ generalHtml, kurlyHtml, onGeneralChange, onGeneralBlur, onCopy }: Props) {
+export function HtmlCodeDrawer({ generalHtml, kurlyHtml, onCopy }: Props) {
   const id = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -48,12 +46,10 @@ export function HtmlCodeDrawer({ generalHtml, kurlyHtml, onGeneralChange, onGene
           }}>{target === "general" ? "기본 HTML" : "컬리용 HTML"}</button>)}
       </div>
       <div className="html-drawer-content" role="tabpanel" id={`${id}-code`} aria-labelledby={`${id}-${mode}`}>
-        <p>{mode === "general" ? "직접 수정할 수 있습니다. 상단 저장 버튼으로 저장하세요." : "이미지의 공통·컬리 전용 설정을 반영한 읽기 전용 코드입니다."}</p>
+        <p>조회·복사 전용입니다. 이미지를 추가·삭제하거나 순서·적용 범위를 변경하면 HTML이 자동 생성됩니다.</p>
         <textarea aria-label={mode === "general" ? "기본 HTML 코드" : "컬리용 HTML 코드"}
-          value={value} readOnly={mode === "kurly"} spellCheck={false} wrap="off"
-          placeholder="이미지를 추가하면 HTML이 생성됩니다."
-          onChange={(event) => { if (mode === "general") onGeneralChange(event.target.value); }}
-          onBlur={() => { if (mode === "general") onGeneralBlur(); }} />
+          value={value} readOnly spellCheck={false} wrap="off"
+          placeholder="이미지를 추가하면 HTML이 생성됩니다." />
       </div>
       <div className="html-drawer-footer"><span role="status">{copyError ? "복사하지 못했습니다. 다시 시도해 주세요." : copied ? "복사되었습니다." : ""}</span>
         <button type="button" disabled={!value.trim()} onClick={async () => {
