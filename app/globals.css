@@ -1191,6 +1191,7 @@ td:last-child {
   padding: 12px 8px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   border: 0;
   border-radius: var(--radius-sm);
   background: rgba(229, 229, 234, 0.72);
@@ -1636,17 +1637,21 @@ td:last-child {
   transform: scale(0.985);
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
 }
-.file.drag-over::before {
+.file.drag-over-before::before,
+.file.drag-over-after::after {
   content: "";
   position: absolute;
   right: 8px;
-  bottom: -4px;
   left: 8px;
+  z-index: 2;
   height: 2px;
   border-radius: 2px;
   background: var(--accent);
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+  pointer-events: none;
 }
+.file.drag-over-before::before { top: -4px; }
+.file.drag-over-after::after { bottom: -4px; }
 .file .thumb {
   display: block;
   object-fit: cover;
@@ -1874,7 +1879,6 @@ td:last-child {
   .html-code-drawer { top: 81px; bottom: 16px; }
 }
 @media (max-height: 640px) {
-  .modal.wide .upload-side { overflow-y: auto; }
   .modal.wide .image-list { min-height: 100px; }
   .modal.wide .dropzone { height: 80px; }
   .html-code-drawer { padding: 12px; }
