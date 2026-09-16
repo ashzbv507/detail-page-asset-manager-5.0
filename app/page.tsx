@@ -12,6 +12,7 @@ import { matchesTaskSearch, normalizeSearch } from "./lib/task-search";
 import { mergeSavedTask } from "./lib/task-state";
 import { reorderByDrop, type DropPosition } from "./lib/image-order";
 import { dragAutoScrollVelocity, DRAG_SCROLL_HORIZONTAL_TOLERANCE, DRAG_SCROLL_VERTICAL_TOLERANCE } from "./lib/drag-auto-scroll";
+import { createHtmlPreviewPayload, HTML_PREVIEW_STORAGE_KEY, HTML_PREVIEW_WINDOW_NAME, type HtmlPreviewMode } from "./lib/html-preview";
 
 type DetailTask = {
   id?: string;
@@ -166,10 +167,14 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const dragScrollFrameRef = useRef<number | null>(null);
   const dragScrollLastFrameTimeRef = useRef<number | null>(null);
   const dragScrollVelocityRef = useRef(0);
+  const htmlPreviewWindowRef = useRef<Window | null>(null);
+  const htmlPreviewModeRef = useRef<HtmlPreviewMode | null>(null);
+  const htmlPreviewVersionRef = useRef(Date.now());
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [dropPosition, setDropPosition] = useState<DropPosition>("before");
   const [fileDragActive, setFileDragActive] = useState(false);
+  const [htmlPreviewError, setHtmlPreviewError] = useState("");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [saveError, setSaveError] = useState("");
@@ -258,6 +263,36 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const generalHtml = preserveStoredHtml ? draft.detailHtml : generatedHtml;
   const generalImages = useMemo(() => imagesForHtmlTarget(images, "general"), [images]);
   const kurlyImages = useMemo(() => imagesForHtmlTarget(images, "kurly"), [images]);
+  const publishHtmlPreview = useCallback((mode: HtmlPreviewMode) => {
+    const version = Math.max(Date.now(), htmlPreviewVersionRef.current + 1);
+    htmlPreviewVersionRef.current = version;
+    const previewImages = mode === "general" ? generalImages : kurlyImages;
+    try {
+      window.localStorage.setItem(HTML_PREVIEW_STORAGE_KEY, JSON.stringify(createHtmlPreviewPayload(mode, previewImages, version)));
+      setHtmlPreviewError("");
+      return true;
+    } catch {
+      setHtmlPreviewError("새 창 미리보기 데이터를 준비하지 못했습니다.");
+      return false;
+    }
+  }, [generalImages, kurlyImages]);
+  const openHtmlPreview = (mode: HtmlPreviewMode) => {
+    htmlPreviewModeRef.current = mode;
+    if (!publishHtmlPreview(mode)) return;
+    let previewWindow = htmlPreviewWindowRef.current;
+    if (!previewWindow || previewWindow.closed) {
+      previewWindow = window.open("/html-preview", HTML_PREVIEW_WINDOW_NAME);
+      htmlPreviewWindowRef.current = previewWindow;
+    }
+    if (!previewWindow) {
+      setHtmlPreviewError("팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.");
+      return;
+    }
+    previewWindow.focus();
+  };
+  useEffect(() => {
+    if (htmlPreviewModeRef.current) publishHtmlPreview(htmlPreviewModeRef.current);
+  }, [publishHtmlPreview]);
   const refreshImagePreviews = () => setPreviewVersion((current) => current + 1);
   const sortImages = (items: ImageAsset[]) => [...items].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" }));
   const addFiles = (files: FileList | null) => {
@@ -304,7 +339,7 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /><TextArea label="촬영본 NAS 경로" value={draft.shootingNas} onChange={(value) => setDraft((current) => ({ ...current, shootingNas: value }))} /></section>
     </div> : <div className="step-two">
       <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list" ref={imageListRef}>{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? `drag-over-${dropPosition}` : ""}`} key={image.id} draggable onDragStart={(event) => { stopDragAutoScroll(); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", image.id); setDraggedId(image.id); }} onDragOver={(event) => { if (!draggedId && !event.dataTransfer.types.includes("text/plain")) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; if (draggedId === image.id) { setDragOverId(null); return; } const bounds = event.currentTarget.getBoundingClientRect(); const nextPosition = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after"; setDragOverId((current) => current === image.id ? current : image.id); setDropPosition((current) => current === nextPosition ? current : nextPosition); }} onDrop={(event) => { if (event.dataTransfer.files.length) return; const sourceId = event.dataTransfer.getData("text/plain") || draggedId; if (!sourceId) return; event.preventDefault(); event.stopPropagation(); const bounds = event.currentTarget.getBoundingClientRect(); const finalPosition = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after"; moveImage(sourceId, image.id, finalPosition); stopDragAutoScroll(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { stopDragAutoScroll(); setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={withPreviewImageVersion(image.url, previewVersion)} alt="" draggable={false} /><div className="file-meta"><b title={image.name}>{image.name}</b>{imageMetadata(image) && <small>{imageMetadata(image)}</small>}</div><div className="file-actions"><ImageTargetSelect value={getImageHtmlTarget(image)} imageName={image.name} onChange={(target) => changeImageTarget(image.id, target)} /><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
-      <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3><div className="preview-grid"><div className="preview-box"><div className="preview-box-title">HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{generalImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{generalImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title">컬리 HTML 미리보기</div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div></section>
+      <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3>{htmlPreviewError && <p className="preview-window-error" role="alert">{htmlPreviewError}</p>}<div className="preview-grid"><div className="preview-box"><div className="preview-box-title"><span>HTML 미리보기</span><button type="button" onClick={() => openHtmlPreview("general")}><ExternalLink size={14} aria-hidden="true" />새 창 미리보기</button></div><div className="preview-canvas"><div className="preview-strip">{generalImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{generalImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div><div className="preview-box kurly-preview-box"><div className="preview-box-title"><span>컬리 HTML 미리보기</span><button type="button" onClick={() => openHtmlPreview("kurly")}><ExternalLink size={14} aria-hidden="true" />새 창 미리보기</button></div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div></div></section>
       <HtmlCodeDrawer generalHtml={generalHtml} kurlyHtml={generateKurlyHtml(images, brandKey)}
         onCopy={copyText} />
     </div>}
