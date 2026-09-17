@@ -53,8 +53,8 @@ export function generateGeneralHtml(images: AssetImage[], brandKey: BrandKey = "
   return generateHtml(imagesForHtmlTarget(images, "general"), brandKey);
 }
 
-export function generateKurlyHtml(images: AssetImage[], brandKey: BrandKey = "amante") {
-  return generateHtml(imagesForHtmlTarget(images, "kurly"), brandKey);
+export function generateKurlyHtml(images: AssetImage[], brandKey: BrandKey = "amante", enabled = true) {
+  return enabled ? generateHtml(imagesForHtmlTarget(images, "kurly"), brandKey) : "";
 }
 
 export function htmlForImages(images: AssetImage[], brandKey: BrandKey = "amante") {

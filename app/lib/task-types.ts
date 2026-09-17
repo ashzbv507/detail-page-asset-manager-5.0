@@ -27,6 +27,7 @@ export type AssetTask = {
   thumbnailNas: string;
   detailNas: string;
   shootingNas: string;
+  kurlyEnabled?: boolean;
   images: AssetImage[];
 };
 

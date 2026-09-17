@@ -19,6 +19,86 @@ const { getShareRecord } = require('../app/api/shares/route.ts');
 const filenames = (html) => [...html.matchAll(/src=['"]([^'"]+)['"]/g)].map((match) => new URL(match[1]).pathname.split('/').pop());
 const image = (name, htmlTarget) => ({ id: name, name, url: `https://example.invalid/${name}`, htmlTarget });
 
+test('disabling Kurly leaves basic HTML and every image target unchanged for all brands', () => {
+  const images = [image('common.jpg', 'common'), image('general.jpg', 'general'), image('kurly.jpg', 'kurly')];
+  const before = JSON.stringify(images);
+  for (const brand of BRAND_KEYS) {
+    assert.equal(generateKurlyHtml(images, brand, false), '');
+    assert.deepEqual(filenames(generateGeneralHtml(images, brand)), ['common.jpg', 'general.jpg']);
+    assert.deepEqual(filenames(generateKurlyHtml(images, brand, true)), ['common.jpg', 'kurly.jpg']);
+  }
+  assert.equal(JSON.stringify(images), before);
+});
+
+test('Kurly setting survives create, edit, reload, and live share; legacy tasks default enabled', async (t) => {
+  const previousEnv = { url: process.env.SUPABASE_URL, secret: process.env.SUPABASE_SECRET_KEY };
+  process.env.SUPABASE_URL = 'https://test-database.invalid';
+  process.env.SUPABASE_SECRET_KEY = 'test-only';
+  t.after(() => {
+    for (const [key, value] of [['SUPABASE_URL', previousEnv.url], ['SUPABASE_SECRET_KEY', previousEnv.secret]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  let rows = [];
+  const id = '12345678-1234-1234-1234-123456789abc';
+  t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
+    if (String(url).includes('/asset_shares?')) return Response.json([{ snapshot_data: { taskIds: [id] } }]);
+    if (String(url).includes('limit=1')) return Response.json([]);
+    if (init.method === 'POST') rows = JSON.parse(init.body);
+    if (init.method === 'PATCH') rows = [JSON.parse(init.body)];
+    return Response.json(rows);
+  });
+  for (const brandKey of BRAND_KEYS) {
+    const images = [image('common.jpg', 'common'), image('general.jpg', 'general'), image('kurly.jpg', 'kurly')];
+    const payload = { id, brandKey, productName: 'Test', itemName: 'Test', images, kurlyEnabled: false, detailHtml: generateGeneralHtml(images, brandKey) };
+    const created = await tasksRoute.POST(new Request('http://localhost/api/tasks', { method: 'POST', body: JSON.stringify({ task: payload }) }));
+    assert.equal(created.status, 200);
+    assert.equal(rows[0].kurly_enabled, false);
+    const loaded = (await (await tasksRoute.GET(new Request('http://localhost/api/tasks'))).json()).tasks[0];
+    assert.equal(loaded.kurlyEnabled, false);
+    assert.equal(loaded.kurlyHtml, '');
+    assert.equal(loaded.detailHtml, payload.detailHtml);
+    assert.deepEqual(loaded.images.map(getImageHtmlTarget), ['common', 'general', 'kurly']);
+    const shared = (await getShareRecord('test-token')).tasks[0];
+    assert.equal(shared.kurlyEnabled, false);
+    assert.equal(generateKurlyHtml(shared.images, brandKey, shared.kurlyEnabled), '');
+    const edited = await tasksRoute.PATCH(new Request(`http://localhost/api/tasks?id=${id}`, { method: 'PATCH', body: JSON.stringify({ task: { ...payload, kurlyEnabled: true } }) }));
+    assert.equal(edited.status, 200);
+    const enabled = (await edited.json()).tasks[0];
+    assert.equal(enabled.kurlyEnabled, true);
+    assert.deepEqual(filenames(enabled.kurlyHtml), ['common.jpg', 'kurly.jpg']);
+    delete rows[0].kurly_enabled;
+    assert.equal((await (await tasksRoute.GET(new Request('http://localhost/api/tasks'))).json()).tasks[0].kurlyEnabled, true);
+  }
+});
+
+test('missing additive migration preserves ordinary saves but does not silently lose disabled setting', async (t) => {
+  const previousEnv = { url: process.env.SUPABASE_URL, secret: process.env.SUPABASE_SECRET_KEY };
+  process.env.SUPABASE_URL = 'https://test-database.invalid';
+  process.env.SUPABASE_SECRET_KEY = 'test-only';
+  t.after(() => {
+    for (const [key, value] of [['SUPABASE_URL', previousEnv.url], ['SUPABASE_SECRET_KEY', previousEnv.secret]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  let legacyWrites = 0;
+  t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
+    if (String(url).includes('limit=1')) return Response.json([]);
+    const rows = JSON.parse(init.body);
+    if ('kurly_enabled' in rows[0]) return Response.json({ code: 'PGRST204', message: 'Missing kurly_enabled column' }, { status: 400 });
+    legacyWrites += 1;
+    return Response.json(rows);
+  });
+  const payload = { brandKey: 'amante', productName: 'Test', itemName: 'Test', images: [] };
+  const enabled = await tasksRoute.POST(new Request('http://localhost/api/tasks', { method: 'POST', body: JSON.stringify({ task: payload }) }));
+  assert.equal(enabled.status, 200);
+  assert.equal(legacyWrites, 1);
+  const disabled = await tasksRoute.POST(new Request('http://localhost/api/tasks', { method: 'POST', body: JSON.stringify({ task: { ...payload, kurlyEnabled: false } }) }));
+  assert.equal(disabled.status, 502);
+  assert.match((await disabled.json()).error, /supabase-kurly-enabled.sql/);
+  assert.equal(legacyWrites, 1);
+});
+
 test('all brands filter both outputs, preserving order and production URLs', () => {
   const images = [image('common.jpg', 'common'), image('general.jpg', 'general'), image('kurly.jpg', 'kurly'), image('last.jpg', 'common')];
   for (const brand of BRAND_KEYS) {

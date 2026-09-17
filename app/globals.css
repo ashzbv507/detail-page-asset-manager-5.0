@@ -1798,6 +1798,35 @@ td:last-child {
   color: #c0392b;
   font-size: 12px;
 }
+.kurly-preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  cursor: pointer;
+}
+.kurly-preview-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.kurly-preview-box.is-disabled .preview-canvas {
+  background: var(--canvas);
+  color: var(--muted);
+}
+.preview-box-title button:disabled,
+.html-drawer-tabs button:disabled,
+.saved-detail-panel .html-mode-tabs button:disabled,
+.html-link-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.kurly-preview-box.is-disabled .preview-box-title {
+  background: var(--canvas);
+  color: var(--muted);
+}
 .preview-grid {
   display: grid;
   min-height: 0;

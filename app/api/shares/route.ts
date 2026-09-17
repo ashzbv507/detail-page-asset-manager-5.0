@@ -3,9 +3,9 @@ import { decodeStoredImageUrl, getImageHtmlTarget } from "../../lib/image-target
 import type { AssetImage } from "../../lib/task-types";
 
 type ShareImage = Partial<AssetImage>;
-type ShareTask = { id?: string; brandKey?: string; product?: string; item?: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: ShareImage[] };
+type ShareTask = { kurlyEnabled?: boolean; id?: string; brandKey?: string; product?: string; item?: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: ShareImage[] };
 type ShareRecord = { tokenHash: string; tasks: ShareTask[]; createdAt: string; expiresAt: string };
-type DatabaseTask = { id: string; brand_key: string; product_name: string; item_name: string; store_link: string; image_urls: string[]; detail_html: string; thumbnail_nas: string; detail_nas: string; shooting_nas: string; vendors: string[]; note: string };
+type DatabaseTask = { kurly_enabled?: boolean; id: string; brand_key: string; product_name: string; item_name: string; store_link: string; image_urls: string[]; detail_html: string; thumbnail_nas: string; detail_nas: string; shooting_nas: string; vendors: string[]; note: string };
 
 const PERMANENT_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
 
@@ -32,6 +32,7 @@ function normalizeTask(task: ShareTask): ShareTask | null {
   return {
     id: task.id,
     brandKey: task.brandKey,
+    kurlyEnabled: task.kurlyEnabled !== false,
     product: task.product,
     item: task.item,
     html: task.html ?? "",
@@ -55,13 +56,13 @@ function toSharedTask(row: DatabaseTask): ShareTask {
     const decoded = decodeStoredImageUrl(storedUrl);
     return { id: `${row.id}-image-${index}`, name: filenameFrom(decoded.url) || `image-${index + 1}`, ...decoded };
   });
-  return { id: row.id, brandKey: row.brand_key, product: row.product_name, item: row.item_name, html: row.detail_html ?? "", storeLink: row.store_link ?? "", vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", images };
+  return { id: row.id, kurlyEnabled: row.kurly_enabled !== false, brandKey: row.brand_key, product: row.product_name, item: row.item_name, html: row.detail_html ?? "", storeLink: row.store_link ?? "", vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", images };
 }
 
 async function getCurrentTasks(taskIds: string[]) {
   const ids = taskIds.filter((id) => /^[a-z0-9-]{36}$/i.test(id));
   if (!ids.length) return [];
-  const response = await supabaseRequest(`asset_tasks?select=id,brand_key,product_name,item_name,store_link,image_urls,detail_html,thumbnail_nas,detail_nas,shooting_nas,vendors,note&id=in.(${encodeURIComponent(ids.join(","))})&order=created_at.asc`);
+  const response = await supabaseRequest(`asset_tasks?select=*&id=in.(${encodeURIComponent(ids.join(","))})&order=created_at.asc`);
   return (await response.json() as DatabaseTask[]).map(toSharedTask);
 }
 

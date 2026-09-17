@@ -7,7 +7,7 @@ import { productGroupLabel } from "../../lib/product-grouping";
 import type { AssetImage, BrandKey } from "../../lib/task-types";
 
 type SharedImage = AssetImage;
-type SharedTask = { id: string; brandKey?: BrandKey; product: string; item: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: SharedImage[] };
+type SharedTask = { kurlyEnabled?: boolean; id: string; brandKey?: BrandKey; product: string; item: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: SharedImage[] };
 
 const BRAND_IMAGES: Record<string, string> = { amante: "/brands/amante.png", imbedding: "/brands/imbedding.png", serendiment: "/brands/serendiment.png", sommier: "/brands/sommier.png" };
 
@@ -34,14 +34,14 @@ function SharedDetailPanel({ task, onClose }: { task: SharedTask; onClose: () =>
   const [htmlMode, setHtmlMode] = useState<"html" | "url">("html");
   const [htmlPanelMode, setHtmlPanelMode] = useState<"general" | "kurly">("general");
   const images = task.images ?? [];
-  const html = htmlPanelMode === "general" ? (task.html || generateGeneralHtml(images, task.brandKey)) : generateKurlyHtml(images, task.brandKey);
+  const html = htmlPanelMode === "general" ? (task.html || generateGeneralHtml(images, task.brandKey)) : generateKurlyHtml(images, task.brandKey, task.kurlyEnabled !== false);
   const displayed = htmlMode === "html" ? html.split("\n").filter(Boolean) : [...html.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id]);
   return <aside className="detail-panel saved-detail-panel share-detail-panel">
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X size={16} /></button></div>
     <div className="detail-body">
       <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b><span>거래처</span><b>{task.vendors?.join(", ") || "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
-      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight size={16} /></button><button type="button" className="copy-action" title="현재 내용 복사" aria-label="현재 내용 복사" onClick={() => void copyText(displayed.join("\n"))}><Copy size={16} /></button></span></div><div className="code-box">{displayed.map((line, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${line}`}>{htmlMode === "url" ? <a href={line} target="_blank" rel="noopener noreferrer">{line}</a> : line}</p>)}</div></section>
+      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" disabled={task.kurlyEnabled === false} className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight size={16} /></button><button type="button" className="copy-action" title="현재 내용 복사" aria-label="현재 내용 복사" disabled={!html.trim()} onClick={() => void copyText(displayed.join("\n"))}><Copy size={16} /></button></span></div><div className="code-box">{displayed.map((line, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${line}`}>{htmlMode === "url" ? <a href={line} target="_blank" rel="noopener noreferrer">{line}</a> : line}</p>)}</div></section>
       <section className="detail-section paths"><h3>NAS 경로</h3><SharedPathRow label="썸네일" value={task.thumbnailNas ?? ""} /><SharedPathRow label="상세페이지" value={task.detailNas ?? ""} /><SharedPathRow label="촬영본" value={task.shootingNas ?? ""} /></section>
     </div>
   </aside>;
