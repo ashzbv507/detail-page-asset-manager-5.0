@@ -146,14 +146,15 @@ function DiscardChangesDialog({ onKeep, onDiscard }: { onKeep: () => void; onDis
   </dialog>;
 }
 
-function OverwriteTaskDialog({ product, item, onCancel, onOverwrite }: { product: string; item: string; onCancel: () => void; onOverwrite: () => void }) {
+function OverwriteTaskDialog({ product, item, note, onCancel, onOverwrite }: { product: string; item: string; note: string; onCancel: () => void; onOverwrite: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
   return <dialog ref={ref} className="discard-changes-dialog" aria-labelledby="overwrite-title" aria-describedby="overwrite-description"
     onCancel={(event) => { event.preventDefault(); onCancel(); }}>
-    <h2 id="overwrite-title">동일한 작업이 이미 있습니다.</h2>
+    <h2 id="overwrite-title">참고사항까지 동일한 작업이 이미 있습니다.</h2>
     <p id="overwrite-description"><strong>{product} · {item}</strong>의 기존 내용을 새 내용으로 덮어쓰시겠습니까?</p>
-    <div><button type="button" className="modal-action modal-action-secondary" autoFocus onClick={onCancel}>계속 편집</button>
+    <p>참고사항: {note.trim() || "없음"}</p>
+    <div><button type="button" className="modal-action modal-action-secondary" autoFocus onClick={onCancel}>취소</button>
       <button type="button" className="modal-action modal-action-primary" onClick={onOverwrite}>덮어쓰기</button></div>
   </dialog>;
 }
@@ -346,7 +347,7 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
     </div>}
     {saveError && <div className="modal-save-error" role="alert">{saveError}</div>}
   </section>{confirmDiscard && <DiscardChangesDialog onKeep={() => setConfirmDiscard(false)} onDiscard={onClose} />}
-    {confirmOverwrite && <OverwriteTaskDialog product={draft.product || "새 작업"} item={draft.item || "미분류"} onCancel={() => setConfirmOverwrite(false)} onOverwrite={() => { setConfirmOverwrite(false); void saveTask(true); }} />}</div>;
+    {confirmOverwrite && <OverwriteTaskDialog product={draft.product || "새 작업"} item={draft.item || "미분류"} note={draft.note} onCancel={() => setConfirmOverwrite(false)} onOverwrite={() => { setConfirmOverwrite(false); void saveTask(true); }} />}</div>;
 }
 
 function formatBytes(size: number) {

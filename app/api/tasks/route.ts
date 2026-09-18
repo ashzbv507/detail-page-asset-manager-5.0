@@ -1,5 +1,6 @@
 import { buildImageUrl, generateKurlyHtml } from "../../lib/html";
 import { decodeStoredImageUrl, encodeStoredImageUrl } from "../../lib/image-target";
+import { TASK_CONFLICT_COLUMNS, taskDuplicatePath } from "../../lib/task-identity";
 import type { BrandKey, ImageHtmlTarget } from "../../lib/task-types";
 
 type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; htmlTarget?: ImageHtmlTarget; excludeFromKurly?: boolean };
@@ -41,6 +42,14 @@ type DatabaseRow = {
 
 const BRAND_KEYS = ["amante", "imbedding", "serendiment", "sommier"] as const;
 
+const NOTE_MIGRATION_MESSAGE = "참고사항별 별도 등록을 사용하려면 Supabase에서 docs/supabase-task-note-identity.sql을 먼저 실행해 주세요.";
+
+class DatabaseError extends Error {
+  constructor(public code: string | undefined, status: number) {
+    super(`Supabase 요청 실패 (${status})`);
+  }
+}
+
 function text(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function list(value: unknown) { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : []; }
 function brand(value: unknown) { const key = text(value); return BRAND_KEYS.includes(key as typeof BRAND_KEYS[number]) ? key : "amante"; }
@@ -76,7 +85,7 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
       }
       throw new Error("컬리 생성 설정을 저장하려면 Supabase에서 docs/supabase-kurly-enabled.sql을 먼저 실행해 주세요.");
     }
-    throw new Error(`Supabase 요청 실패 (${response.status})`);
+    throw new DatabaseError(details?.code, response.status);
   }
   return response;
 }
@@ -94,7 +103,21 @@ function toClient(row: DatabaseRow) {
   });
   return { id: row.id, brandKey: brand(row.brand_key), productName: row.product_name, itemName: row.item_name, optionName: row.option_name ?? "", storeLink: row.store_link ?? "", images, vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", detailHtml: row.detail_html ?? "", kurlyEnabled: row.kurly_enabled !== false, kurlyHtml: generateKurlyHtml(images, brand(row.brand_key) as BrandKey, row.kurly_enabled !== false) };
 }
-function failure(error: unknown) { const message = error instanceof Error ? error.message : "Supabase 연결 중 오류가 발생했습니다."; return Response.json({ error: message }, { status: message.includes("환경 변수") ? 503 : message.includes("필수") ? 400 : 502 }); }
+function failure(error: unknown) {
+  if (error instanceof DatabaseError && error.code === "42P10") return Response.json({ error: NOTE_MIGRATION_MESSAGE }, { status: 503 });
+  if (error instanceof DatabaseError && error.code === "23505") return Response.json({ error: "동일 제품명·품목·옵션·참고사항의 작업이 이미 있습니다. 참고사항을 다르게 입력해 주세요." }, { status: 409 });
+  const message = error instanceof Error ? error.message : "Supabase 연결 중 오류가 발생했습니다.";
+  return Response.json({ error: message }, { status: message.includes("환경 변수") || message === NOTE_MIGRATION_MESSAGE ? 503 : message.includes("필수") ? 400 : 502 });
+}
+
+async function findDuplicate(row: DatabaseRow) {
+  const response = await supabaseRequest(taskDuplicatePath(row));
+  return (await response.json() as Array<{ id: string }>)[0];
+}
+
+function duplicateFailure() {
+  return Response.json({ error: "제품명·품목·옵션·참고사항이 동일한 작업이 이미 있습니다.", code: "DUPLICATE_TASK" }, { status: 409 });
+}
 
 export async function GET(request: Request) {
   try {
@@ -111,14 +134,29 @@ export async function POST(request: Request) {
     const payload = body.tasks ?? (body.task ? [body.task] : []);
     if (!payload.length) return Response.json({ error: "저장할 작업 데이터가 없습니다." }, { status: 400 });
     const rows = payload.map(toRow);
-    if (body.task) {
+    if (body.task && !body.tasks) {
       const row = rows[0];
-      const duplicateResponse = await supabaseRequest(`asset_tasks?select=id&brand_key=eq.${encodeURIComponent(row.brand_key)}&product_name=eq.${encodeURIComponent(row.product_name)}&item_name=eq.${encodeURIComponent(row.item_name)}&option_name=eq.${encodeURIComponent(row.option_name)}&limit=1`);
-      const duplicate = (await duplicateResponse.json() as Array<{ id: string }>)[0];
-      if (duplicate && !body.overwrite) return Response.json({ error: "동일한 작업이 이미 있습니다.", code: "DUPLICATE_TASK" }, { status: 409 });
-      if (duplicate) rows[0] = { ...row, id: duplicate.id };
+      const duplicate = await findDuplicate(row);
+      if (duplicate && !body.overwrite) return duplicateFailure();
+      if (duplicate) {
+        // Overwrite only the exact five-field match explicitly confirmed by
+        // the user, never a different-note row with the same product/item.
+        const response = await supabaseRequest(`asset_tasks?id=eq.${encodeURIComponent(duplicate.id)}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ ...row, id: duplicate.id }) });
+        return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
+      }
+      try {
+        const response = await supabaseRequest("asset_tasks", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(rows) });
+        return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
+      } catch (error) {
+        if (error instanceof DatabaseError && error.code === "23505") {
+          // A simultaneous identical create must still ask for confirmation.
+          if (await findDuplicate(row)) return duplicateFailure();
+          throw new Error(NOTE_MIGRATION_MESSAGE);
+        }
+        throw error;
+      }
     }
-    const response = await supabaseRequest(`asset_tasks?on_conflict=brand_key,product_name,item_name,option_name`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(rows) });
+    const response = await supabaseRequest(`asset_tasks?on_conflict=${TASK_CONFLICT_COLUMNS}`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(rows) });
     return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
   } catch (error) { return failure(error); }
 }

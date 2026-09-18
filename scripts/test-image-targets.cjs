@@ -153,7 +153,7 @@ test('single create requires explicit confirmation before overwriting a duplicat
   let writtenRows = [];
   t.mock.method(globalThis, 'fetch', async (url, init = {}) => {
     if (String(url).includes('limit=1')) return Response.json([{ id: 'existing-id' }]);
-    if (init.method === 'POST') { writeCount += 1; writtenRows = JSON.parse(init.body); return Response.json(writtenRows); }
+    if (init.method === 'PATCH') { writeCount += 1; writtenRows = [JSON.parse(init.body)]; return Response.json(writtenRows); }
     return Response.json([]);
   });
   const payload = { brandKey: 'amante', productName: 'Duplicate', itemName: '차렵이불', images: [] };

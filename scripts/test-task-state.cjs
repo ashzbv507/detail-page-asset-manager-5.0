@@ -12,6 +12,13 @@ require.extensions['.ts'] = (module, filename) => {
 const { mergeSavedTask } = require('../app/lib/task-state.ts');
 const sort = (items) => [...items].sort((a, b) => a.item.localeCompare(b.item));
 
+test('same product/item with different notes remains a separate row by persisted ID', () => {
+  const first = { id: '1', item: 'a', note: '거래처 A' };
+  const second = { id: '2', item: 'a', note: '거래처 B' };
+  const groups = [{ product: 'A', count: 1, items: [first] }];
+  assert.deepEqual(mergeSavedTask(groups, second, 'A', sort), [{ product: 'A', count: 2, items: [first, second] }]);
+});
+
 test('updates a saved row in place without reloading the list', () => {
   const groups = [{ product: 'A', count: 2, items: [{ id: '1', item: 'b' }, { id: '2', item: 'a' }] }];
   assert.deepEqual(mergeSavedTask(groups, { id: '1', item: 'c' }, 'A', sort), [
