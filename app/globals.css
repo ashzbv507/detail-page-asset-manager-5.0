@@ -426,6 +426,9 @@ td:last-child {
 .item-row {
   cursor: pointer;
 }
+.item-row td {
+  background: var(--color-surface-row);
+}
 .item-row:hover td {
   background: rgba(0, 122, 255, 0.035);
 }
@@ -2458,7 +2461,7 @@ td:last-child {
   cursor: pointer;
 }
 .item-row.share-selectable td {
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--color-surface-row);
 }
 .item-row.share-selected td {
   background: rgba(0, 122, 255, 0.12);
