@@ -64,7 +64,7 @@ export default function ShareViewer({ token }: { token: string }) {
     }).then((payload) => {
       const sharedTasks = payload.share?.tasks ?? [];
       setTasks(sharedTasks);
-      setCollapsedGroups(new Set(sharedTasks.map((task) => productGroupLabel(task.product, task.brandKey))));
+      setCollapsedGroups(new Set());
     }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "공유 정보를 불러오지 못했습니다.")).finally(() => setLoading(false));
   }, [token]);
   const groups = useMemo(() => Object.entries(tasks.reduce<Record<string, SharedTask[]>>((all, task) => { const groupLabel = productGroupLabel(task.product, task.brandKey); (all[groupLabel] ??= []).push(task); return all; }, {})), [tasks]);
