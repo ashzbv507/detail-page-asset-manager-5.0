@@ -3,12 +3,11 @@ import { imagesForHtmlTarget } from "./image-target";
 
 type ImageUrlRule = { baseUrl: string; quote: "'" | '"' };
 
-// The two confirmed production CDN rules. Serendiment and Sommier retain the
-// existing image host until their separate CDN URL rule is provided.
+// Brand-specific production image hosts used by generated HTML.
 const IMAGE_URL_RULES: Record<BrandKey, ImageUrlRule> = {
   amante: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
   imbedding: { baseUrl: "http://img.imbedding.co.kr/images/", quote: '"' },
-  serendiment: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
+  serendiment: { baseUrl: "https://img.sommandco.co.kr/images/serendiment/", quote: "'" },
   sommier: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
 };
 

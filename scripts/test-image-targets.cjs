@@ -115,6 +115,12 @@ test('all brands filter both outputs, preserving order and production URLs', () 
   }
 });
 
+test('Serendiment HTML uses its dedicated production image host', () => {
+  const url = buildImageUrl('상세 이미지 01.jpg', 'serendiment');
+  assert.equal(url, 'https://img.sommandco.co.kr/images/serendiment/%EC%83%81%EC%84%B8%20%EC%9D%B4%EB%AF%B8%EC%A7%80%2001.jpg');
+  assert.match(generateGeneralHtml([image('sample.jpg', 'common')], 'serendiment'), /img\.sommandco\.co\.kr\/images\/serendiment\/sample\.jpg/);
+});
+
 test('existing exclusions, URL markers, and every target transition remain compatible', () => {
   assert.equal(getImageHtmlTarget({}), 'common');
   assert.equal(getImageHtmlTarget({ excludeFromKurly: true }), 'general');

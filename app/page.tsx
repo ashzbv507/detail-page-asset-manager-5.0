@@ -377,10 +377,12 @@ const AMANTE_IMBEDDING_ITEM_GROUPS: ItemGroup[] = [
 ];
 
 const SERENDIMENT_ITEM_GROUPS: ItemGroup[] = [
-  { label: "이불", items: ["차렵이불", "홑겹이불커버", "누빔이불커버", "냉감 여름이불", "냉감 홑이불", "극세사 차렵이불", "간절기 차렵이불", "자가발열 차렵이불"] },
-  { label: "베개커버", items: ["2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
+  { label: "이불", items: ["차렵이불", "이불커버", "홑겹이불커버", "누빔이불커버", "냉감 여름이불", "냉감 홑이불", "극세사 차렵이불", "간절기 차렵이불", "자가발열 차렵이불", "고밀도 순면 베딩"] },
+  { label: "베개커버", items: ["베개커버", "2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
   { label: "패드/매트커버", items: ["침대패드", "냉감 침대패드", "극세사 침대패드", "홑겹매트커버", "누빔매트커버", "방수 매트커버"] },
-  { label: "기타", items: ["토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "냉감 토퍼", "이불 겸 패드"] },
+  { label: "타월", items: ["순면 데일리 타월", "면모달 데일리 타월", "면모달 핸드타월"] },
+  { label: "러그/발매트", items: ["러그", "자카드 발매트", "규조토 발매트"] },
+  { label: "기타", items: ["파자마", "룸슈즈", "토퍼", "소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "냉감 토퍼", "이불 겸 패드"] },
 ];
 
 const SOMMIER_ITEM_GROUPS: ItemGroup[] = [
@@ -402,6 +404,14 @@ function itemGroupsForBrand(brandKey: BrandKey) {
 }
 
 function sortTasksByItemOrder(tasks: DetailTask[], brandKey: BrandKey) {
+  if (brandKey === "serendiment") {
+    return [...tasks].sort((left, right) => {
+      const itemComparison = left.item.localeCompare(right.item, "ko-KR", { numeric: true, sensitivity: "base" });
+      if (itemComparison !== 0) return itemComparison;
+      return (left.option ?? "").localeCompare(right.option ?? "", "ko-KR", { numeric: true, sensitivity: "base" });
+    });
+  }
+
   const itemOrder = new Map<string, number>(itemGroupsForBrand(brandKey).flatMap((group) => group.items).map((item, index) => [item, index]));
   return [...tasks].sort((left, right) => {
     const leftOrder = itemOrder.get(left.item);
