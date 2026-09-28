@@ -11,7 +11,7 @@ require.extensions['.ts'] = (module, filename) => {
 };
 const { matchesTaskSearch } = require('../app/lib/task-search.ts');
 const task = {
-  product: '폴란드 구스 (베이직)', item: '차렵이불',
+  product: '폴란드 구스 (베이직)', item: '차렵이불', option: '블루, 3P',
   html: '<img src="https://example.test/HTML_ONLY.jpg">',
   storeLink: 'https://shop.test/products/store-only',
   thumbnailNas: '/쇼핑몰팀/신규 썸네일', detailNas: '/NAS/상세페이지', shootingNas: '/촬영본/가을',
@@ -19,7 +19,7 @@ const task = {
 };
 
 test('search covers product, item, every NAS, HTML, store links and image metadata', () => {
-  for (const query of ['폴란드', '차렵', '신규 썸네일', 'NAS/상세', '촬영본/가을', 'html_only', 'store-only', 'original-only', '한글.png']) {
+  for (const query of ['폴란드', '차렵', '블루, 3P', '신규 썸네일', 'NAS/상세', '촬영본/가을', 'html_only', 'store-only', 'original-only', '한글.png']) {
     assert.equal(matchesTaskSearch(task, query), true, query);
   }
   assert.equal(matchesTaskSearch(task, 'group-label', 'group-label'), true);

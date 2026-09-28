@@ -1,6 +1,7 @@
 type SearchableTask = {
   product: string;
   item: string;
+  option?: string;
   html: string;
   storeLink?: string;
   thumbnailNas: string;
@@ -16,7 +17,7 @@ export function normalizeSearch(value: string) {
 export function matchesTaskSearch(task: SearchableTask, query: string, groupName = "") {
   const needle = normalizeSearch(query);
   if (!needle) return true;
-  const values = [groupName, task.product, task.item, task.html, task.storeLink,
+  const values = [groupName, task.product, task.item, task.option, task.html, task.storeLink,
     task.thumbnailNas, task.detailNas, task.shootingNas,
     ...(task.images ?? []).flatMap((image) => [image.name, image.url])];
   return values.some((value) => {

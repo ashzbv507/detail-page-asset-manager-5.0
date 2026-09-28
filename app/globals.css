@@ -339,6 +339,9 @@ table {
 .c-type {
   width: 9.146%;
 }
+.c-option {
+  width: 10%;
+}
 .c-link {
   width: 3.659%;
 }
@@ -350,6 +353,27 @@ table {
 }
 .c-note {
   width: 12.195%;
+}
+.table-shell.has-option-column .c-name {
+  width: 11.5%;
+}
+.table-shell.has-option-column .c-type {
+  width: 9.4%;
+}
+.table-shell.has-option-column .c-option {
+  width: 9.4%;
+}
+.table-shell.has-option-column .c-link {
+  width: 3.7%;
+}
+.table-shell.has-option-column .c-html {
+  width: 29%;
+}
+.table-shell.has-option-column .c-nas {
+  width: 9.5%;
+}
+.table-shell.has-option-column .c-note {
+  width: 8.5%;
 }
 th {
   position: sticky;
@@ -657,6 +681,40 @@ td:last-child {
 .modal.compact {
   width: min(820px, calc(100vw - 32px));
   height: 568px;
+}
+.modal:not(.brand-serendiment) .field[data-field="옵션"] {
+  display: none;
+}
+@media (min-width: 48rem) and (min-height: 37.5rem) {
+  .modal.compact:is(.brand-amante, .brand-imbedding, .brand-sommier) {
+    height: 580px;
+  }
+  .modal.compact:is(.brand-amante, .brand-imbedding, .brand-sommier) .step-one {
+    overflow-y: hidden;
+  }
+}
+@media (min-width: 48rem) and (min-height: 43.25rem) {
+  .modal.compact.brand-serendiment {
+    width: min(940px, calc(100vw - 32px));
+    height: 660px;
+  }
+  .modal.compact.brand-serendiment .step-one {
+    overflow-y: hidden;
+  }
+  .modal.compact.brand-serendiment .nas-form .field {
+    display: flex;
+    flex: 1 1 0;
+    min-height: 0;
+    flex-direction: column;
+  }
+  .modal.compact.brand-serendiment .nas-form .field:last-child {
+    margin-top: 0;
+  }
+  .modal.compact.brand-serendiment .nas-form .field textarea {
+    flex: 1 1 auto;
+    min-height: 112px;
+    height: auto;
+  }
 }
 .modal.wide {
   position: relative;
@@ -1262,7 +1320,7 @@ td:last-child {
 .table-shell td:last-child {
   border-right: 0;
 }
-.table-shell th:nth-child(4) {
+.table-shell th.html-column {
   border-right: 0;
 }
 .table-shell tbody tr:last-child td {
@@ -1280,7 +1338,7 @@ td:last-child {
 .item-row td:nth-child(2) {
   text-align: center;
 }
-.item-row td:nth-child(3) {
+.item-row td[data-label="링크"] {
   text-align: center;
 }
 .store-link {
@@ -3342,11 +3400,16 @@ h1 {
   .table-shell col.c-note { width: 21%; }
 
   .table-shell col.c-nas,
-  .table-shell tr > :nth-child(5),
-  .table-shell tr > :nth-child(6),
-  .table-shell tr > :nth-child(7) {
+  .table-shell .nas-column {
     display: none;
   }
+
+  .table-shell.has-option-column col.c-name { width: 18%; }
+  .table-shell.has-option-column col.c-type { width: 16%; }
+  .table-shell.has-option-column col.c-option { width: 16%; }
+  .table-shell.has-option-column col.c-link { width: 7%; }
+  .table-shell.has-option-column col.c-html { width: 28%; }
+  .table-shell.has-option-column col.c-note { width: 15%; }
 
   .with-detail .table-shell {
     width: 100%;
@@ -3560,46 +3623,57 @@ h1 {
     white-space: normal;
   }
 
-  .table-scroll .item-row > td:first-child,
-  .table-scroll .item-row > td:nth-child(2),
-  .table-scroll .item-row > td:nth-child(3),
-  .table-scroll .item-row > td:nth-child(4),
-  .table-scroll .item-row > td:nth-child(8) {
+  .table-scroll .item-row > td[data-label="제품명"],
+  .table-scroll .item-row > td[data-label="품목"],
+  .table-scroll .item-row > td[data-label="옵션"],
+  .table-scroll .item-row > td[data-label="링크"],
+  .table-scroll .item-row > td[data-label="HTML"],
+  .table-scroll .item-row > td[data-label="참고사항"] {
     display: flex;
     align-items: center;
     gap: 10px;
   }
 
-  .table-scroll .item-row > td:first-child,
-  .table-scroll .item-row > td:nth-child(2),
-  .table-scroll .item-row > td:nth-child(8) {
+  .table-scroll .item-row > td[data-label="제품명"],
+  .table-scroll .item-row > td[data-label="품목"],
+  .table-scroll .item-row > td[data-label="옵션"],
+  .table-scroll .item-row > td[data-label="참고사항"] {
     grid-column: 1 / -1;
   }
 
-  .table-scroll .item-row > td:first-child {
+  .table-scroll .item-row > td[data-label="제품명"] {
     padding-bottom: 4px;
     color: var(--body);
     font-weight: 650;
   }
 
-  .table-scroll .item-row > td:nth-child(2) {
+  .table-scroll .item-row > td[data-label="품목"] {
     padding-top: 4px;
+  }
+
+  .table-scroll .item-row > td[data-label="옵션"] {
+    padding-top: 4px;
+    color: var(--body);
+  }
+
+  .table-scroll .item-row > td[data-label="옵션"],
+  .table-scroll .item-row:not(:has(> td[data-label="옵션"])) > td[data-label="품목"] {
     border-bottom: 1px solid var(--header-divider) !important;
   }
 
-  .table-scroll .item-row > td:nth-child(3) {
+  .table-scroll .item-row > td[data-label="링크"] {
     justify-content: flex-start;
   }
 
-  .table-scroll .item-row > td:nth-child(4) {
+  .table-scroll .item-row > td[data-label="HTML"] {
     justify-content: flex-end;
   }
 
-  .table-scroll .item-row > td:nth-child(3):empty {
+  .table-scroll .item-row > td[data-label="링크"]:empty {
     visibility: hidden;
   }
 
-  .table-scroll .item-row > td:nth-child(8) {
+  .table-scroll .item-row > td[data-label="참고사항"] {
     align-items: flex-start;
     border-top: 1px solid var(--header-divider) !important;
   }
@@ -3614,18 +3688,18 @@ h1 {
     content: attr(data-label);
   }
 
-  .table-scroll .item-row > td:nth-child(3)::before,
-  .table-scroll .item-row > td:nth-child(4)::before {
+  .table-scroll .item-row > td[data-label="링크"]::before,
+  .table-scroll .item-row > td[data-label="HTML"]::before {
     min-width: 0;
     flex-basis: auto;
   }
 
-  .table-scroll .item-row > td:nth-child(4) .cell-copy {
+  .table-scroll .item-row > td[data-label="HTML"] .cell-copy {
     width: 100%;
     justify-content: flex-end;
   }
 
-  .table-scroll .item-row > td:nth-child(4) .cell-copy > span {
+  .table-scroll .item-row > td[data-label="HTML"] .cell-copy > span {
     display: none;
   }
 
@@ -3914,6 +3988,19 @@ h1 {
   }
 
   .table-shell th:nth-child(3) {
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  .table-shell.has-option-column col.c-link {
+    width: 3.7%;
+  }
+
+  .table-shell.has-option-column col.c-html {
+    width: 29%;
+  }
+
+  .table-shell.has-option-column th:nth-child(4) {
     padding-inline: 8px;
     white-space: nowrap;
   }

@@ -3,9 +3,9 @@ import { decodeStoredImageUrl, getImageHtmlTarget } from "../../lib/image-target
 import type { AssetImage } from "../../lib/task-types";
 
 type ShareImage = Partial<AssetImage>;
-type ShareTask = { kurlyEnabled?: boolean; id?: string; brandKey?: string; product?: string; item?: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: ShareImage[] };
+type ShareTask = { kurlyEnabled?: boolean; id?: string; brandKey?: string; product?: string; item?: string; option?: string; html?: string; storeLink?: string; vendors?: string[]; note?: string; thumbnailNas?: string; detailNas?: string; shootingNas?: string; images?: ShareImage[] };
 type ShareRecord = { tokenHash: string; tasks: ShareTask[]; createdAt: string; expiresAt: string };
-type DatabaseTask = { kurly_enabled?: boolean; id: string; brand_key: string; product_name: string; item_name: string; store_link: string; image_urls: string[]; detail_html: string; thumbnail_nas: string; detail_nas: string; shooting_nas: string; vendors: string[]; note: string };
+type DatabaseTask = { kurly_enabled?: boolean; id: string; brand_key: string; product_name: string; item_name: string; option_name: string; store_link: string; image_urls: string[]; detail_html: string; thumbnail_nas: string; detail_nas: string; shooting_nas: string; vendors: string[]; note: string };
 
 const PERMANENT_EXPIRES_AT = "9999-12-31T23:59:59.999Z";
 
@@ -35,6 +35,7 @@ function normalizeTask(task: ShareTask): ShareTask | null {
     kurlyEnabled: task.kurlyEnabled !== false,
     product: task.product,
     item: task.item,
+    option: task.option ?? "",
     html: task.html ?? "",
     storeLink: task.storeLink ?? "",
     vendors: Array.isArray(task.vendors) ? task.vendors.filter((vendor): vendor is string => typeof vendor === "string") : [],
@@ -56,7 +57,7 @@ function toSharedTask(row: DatabaseTask): ShareTask {
     const decoded = decodeStoredImageUrl(storedUrl);
     return { id: `${row.id}-image-${index}`, name: filenameFrom(decoded.url) || `image-${index + 1}`, ...decoded };
   });
-  return { id: row.id, kurlyEnabled: row.kurly_enabled !== false, brandKey: row.brand_key, product: row.product_name, item: row.item_name, html: row.detail_html ?? "", storeLink: row.store_link ?? "", vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", images };
+  return { id: row.id, kurlyEnabled: row.kurly_enabled !== false, brandKey: row.brand_key, product: row.product_name, item: row.item_name, option: row.option_name ?? "", html: row.detail_html ?? "", storeLink: row.store_link ?? "", vendors: row.vendors ?? [], note: row.note ?? "", thumbnailNas: row.thumbnail_nas ?? "", detailNas: row.detail_nas ?? "", shootingNas: row.shooting_nas ?? "", images };
 }
 
 async function getCurrentTasks(taskIds: string[]) {
