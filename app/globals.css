@@ -2134,7 +2134,7 @@ td:last-child {
   display: grid;
   grid-template-columns: 64px 1.2fr 44px 1fr;
   column-gap: 8px;
-  row-gap: 18px;
+  row-gap: 10px;
   align-items: center;
   font-size: 14px;
 }
@@ -2159,8 +2159,8 @@ td:last-child {
   grid-column: 2/5;
 }
 .saved-detail-panel .detail-section {
-  margin-top: 30px;
-  padding-top: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
   border-top: 1px solid var(--hairline);
 }
 .saved-detail-panel .section-title {
@@ -2193,6 +2193,7 @@ td:last-child {
 .saved-detail-panel .html-section .section-title {
   min-height: 30px;
   align-items: center;
+  margin-bottom: 6px;
 }
 .saved-detail-panel .html-section .section-title h3 {
   margin: 0;
@@ -2214,11 +2215,11 @@ td:last-child {
 .saved-detail-panel .html-mode-tabs {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
 }
 .saved-detail-panel .html-mode-tabs button {
   display: inline-flex;
-  height: 30px;
+  height: 42px;
   align-items: center;
   margin: 0 !important;
   padding: 0 7px;
@@ -2382,7 +2383,7 @@ td:last-child {
   text-underline-offset: 2px;
 }
 .saved-detail-panel .paths {
-  margin-top: 6px;
+  margin-top: 0px;
   padding-top: 0;
   border-top: 0;
 }
@@ -2845,7 +2846,7 @@ main.share-page .app-header {
   line-height: 1.45;
 }
 .saved-detail-panel .detail-section h3 {
-  font-size: 16px;
+  font-size: 15px;
 }
 .saved-detail-panel .html-mode-tabs button {
   font-size: 13px;
