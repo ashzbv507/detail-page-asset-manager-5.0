@@ -3341,6 +3341,18 @@ h1 {
   }
 }
 
+/* Balance the compact modal's visible spacing on desktop. */
+@media (min-width: 56.3125rem) {
+  .modal.compact > header h2 {
+    transform: translateY(1px);
+  }
+
+  .modal.compact .step-one > section {
+    padding-top: 32px;
+    padding-bottom: 36px;
+  }
+}
+
 /* Responsive workspace · preserve the desktop canvas and adapt only when space becomes constrained. */
 @media (max-width: 62.4375rem) {
   html:not(.html-preview-document),
