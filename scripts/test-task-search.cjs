@@ -9,7 +9,7 @@ require.extensions['.ts'] = (module, filename) => {
   });
   module._compile(outputText, filename);
 };
-const { matchesTaskSearch } = require('../app/lib/task-search.ts');
+const { matchesSearchText, matchesTaskSearch } = require('../app/lib/task-search.ts');
 const task = {
   product: '폴란드 구스 (베이직)', item: '차렵이불', option: '블루, 3P',
   html: '<img src="https://example.test/HTML_ONLY.jpg">',
@@ -31,4 +31,19 @@ test('whitespace, case, missing fields and malformed percent escapes are safe', 
   assert.equal(matchesTaskSearch(task, '   '), true);
   assert.equal(matchesTaskSearch({ ...task, storeLink: '100%broken', images: undefined }, 'absent'), false);
   assert.equal(matchesTaskSearch({ ...task, storeLink: undefined, images: [] }, 'store-only'), false);
+});
+
+test('Korean initial-consonant search covers every searchable task field', () => {
+  assert.equal(matchesTaskSearch(task, 'ㅍㄹㄷ ㄱㅅ'), true);
+  assert.equal(matchesTaskSearch(task, 'ㅊㄹㅇㅂ'), true);
+  assert.equal(matchesTaskSearch(task, 'ㅂㄹ'), true);
+  assert.equal(matchesTaskSearch(task, 'ㅅㄱ ㅆㄴㅇ'), true);
+  assert.equal(matchesTaskSearch(task, 'ㄱㄹ', '그룹 라벨'), true);
+  assert.equal(matchesTaskSearch(task, 'ㅊㄹㅇㄹ'), false);
+});
+
+test('item search ignores spaces and supports double initial consonants', () => {
+  assert.equal(matchesSearchText('올인원 매트커버', 'ㅇㅇㅇㅁㅌㅋㅂ', true), true);
+  assert.equal(matchesSearchText('꽃무늬 패드', 'ㄲㅁㄴㅍㄷ', true), true);
+  assert.equal(matchesSearchText('올인원 매트커버', 'ㅇㅇㅇㅂㄱㅋㅂ', true), false);
 });

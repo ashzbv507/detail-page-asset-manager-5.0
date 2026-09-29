@@ -8,7 +8,7 @@ import { getImageHtmlTarget, imagesForHtmlTarget } from "./lib/image-target";
 import type { AssetImage, ImageHtmlTarget } from "./lib/task-types";
 import { ImageTargetSelect } from "./components/ImageTargetSelect";
 import { HtmlCodeDrawer } from "./components/HtmlCodeDrawer";
-import { matchesTaskSearch, normalizeSearch } from "./lib/task-search";
+import { matchesSearchText, matchesTaskSearch, normalizeSearch } from "./lib/task-search";
 import { mergeSavedTask } from "./lib/task-state";
 import { reorderByDrop, type DropPosition } from "./lib/image-order";
 import { dragAutoScrollVelocity, DRAG_SCROLL_HORIZONTAL_TOLERANCE, DRAG_SCROLL_VERTICAL_TOLERANCE } from "./lib/drag-auto-scroll";
@@ -445,20 +445,8 @@ function sortTasksByItemOrder(tasks: DetailTask[], brandKey: BrandKey) {
   });
 }
 
-const HANGUL_INITIALS = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
-
-function getHangulInitials(value: string) {
-  return [...value].map((character) => {
-    const code = character.charCodeAt(0) - 0xac00;
-    return code >= 0 && code <= 11171 ? HANGUL_INITIALS[Math.floor(code / 588)] : character;
-  }).join("");
-}
-
 function matchesItem(value: string, query: string) {
-  const normalizedQuery = query.toLowerCase().replace(/\s+/g, "");
-  if (!normalizedQuery) return true;
-  const normalizedValue = value.toLowerCase().replace(/\s+/g, "");
-  return normalizedValue.includes(normalizedQuery) || getHangulInitials(value).replace(/\s+/g, "").includes(normalizedQuery);
+  return matchesSearchText(value, query, true);
 }
 
 function ItemSelectField({ brandKey, value, onChange }: { brandKey: BrandKey; value: string; onChange: (value: string) => void }) {
@@ -637,7 +625,7 @@ export default function Home() {
   const showOptionColumn = selectedBrand === "serendiment";
   const tableColumnCount = showOptionColumn ? 9 : 8;
   return <main className={`${modal ? "modal-open " : ""}brand-${selectedBrand}`.trim()}>
-    <header className="app-header"><div className="brand-heading"><div className={`brand-switcher ${brandMenuOpen && !modal ? "is-open" : ""}`}><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품명, 품목, 옵션, NAS, HTML·링크 검색" aria-label="검색" /></label><button className="new-task" aria-label="새 작업 등록" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
+    <header className="app-header"><div className="brand-heading"><div className={`brand-switcher ${brandMenuOpen && !modal ? "is-open" : ""}`}><button className={`brand-avatar ${selectedBrand}`} aria-label={`${activeBrand.name} 브랜드 변경`} aria-expanded={brandMenuOpen && !modal} onClick={() => setBrandMenuOpen((current) => !current)}><img src={activeBrand.image} alt="" /><ChevronDown {...iconProps} /></button>{brandMenuOpen && !modal && <div className="brand-menu">{BRANDS.map((brand) => <button key={brand.key} className={brand.key === selectedBrand ? "active" : ""} onMouseDown={(event) => { event.preventDefault(); changeBrand(brand.key); }} onClick={() => changeBrand(brand.key)}><span className={`brand-option-avatar ${brand.key}`}><img src={brand.image} alt="" /></span><b>{brand.name}</b></button>)}</div>}</div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>상세페이지 URL과 NAS 경로를 한 곳에서 관리하세요.</p></div></div><div className="actions"><label className="search"><Search {...iconProps} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="제품 검색" aria-label="검색" /></label><button className="new-task" aria-label="새 작업 등록" onClick={() => { setBrandMenuOpen(false); setEditingTask(null); setSelected(null); setShareMode(false); setShareSelection(new Set()); setModal(1); }}><Plus {...iconProps} /><b>새 작업 등록</b></button></div></header>
     <div className={`workspace ${selected ? "with-detail" : ""}`}><section className={`table-shell${showOptionColumn ? " has-option-column" : ""}`} onClick={(event) => { const target = event.target as HTMLElement; if (selected && !shareMode && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/>{showOptionColumn && <col className="c-option"/>}<col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th>{showOptionColumn && <th>옵션</th>}<th>링크</th><th className="html-column">HTML / URL</th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "썸네일 Drive" : "썸네일 NAS"}</span><span className="table-header-label-compact">썸네일</span></th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "상세페이지 Drive" : "상세페이지 NAS"}</span><span className="table-header-label-compact">상세페이지</span></th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "촬영본 Drive" : "촬영본 NAS"}</span><span className="table-header-label-compact">촬영본</span></th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table><colgroup><col className="c-name"/><col className="c-type"/>{showOptionColumn && <col className="c-option"/>}<col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{loadState !== "ready" || shownGroups.length === 0 ? <tr><td colSpan={tableColumnCount}><div className="table-state" role={loadState === "error" ? "alert" : "status"}>
       <strong>{loadState === "loading" ? "자산 목록을 불러오고 있습니다." : loadState === "error" ? "자산 목록을 불러오지 못했습니다." : searchActive ? "검색 결과가 없습니다." : `${activeBrand.name}에 등록된 자산이 없습니다.`}</strong>
       <p>{loadState === "loading" ? "잠시만 기다려 주세요." : loadState === "error" ? "네트워크 연결을 확인한 뒤 다시 시도해 주세요." : searchActive ? "제품명, 품목, 옵션, NAS 경로 또는 HTML·링크로 다시 검색해 보세요." : "새 작업 등록 버튼으로 첫 자산을 추가해 주세요."}</p>
