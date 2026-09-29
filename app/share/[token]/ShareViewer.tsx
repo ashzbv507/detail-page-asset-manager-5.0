@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ChevronDown, ChevronRight, Copy, ExternalLink, X } from "lucide-react";
 import { generateGeneralHtml, generateKurlyHtml } from "../../lib/html";
 import { productGroupLabel } from "../../lib/product-grouping";
@@ -26,37 +26,41 @@ async function copyText(value: string) {
   }
 }
 
-function SharedCopyCell({ value, label }: { value: string; label: string }) {
-  return <div className="cell-copy"><span title={value}>{value}</span>{value && <button className="copy-cell-button" type="button" aria-label={`${label} 복사`} title={`${label} 복사`} onClick={(event) => { event.stopPropagation(); void copyText(value); }}><Copy size={16} /></button>}</div>;
+function SharedCopyCell({ value, label, onCopied }: { value: string; label: string; onCopied: () => void }) {
+  return <div className="cell-copy"><span title={value}>{value}</span>{value && <button className="copy-cell-button" type="button" aria-label={`${label} 복사`} title={`${label} 복사`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); void copyText(value).then(onCopied); }}><Copy size={16} /></button>}</div>;
 }
 
-function SharedDetailPanel({ task, onClose }: { task: SharedTask; onClose: () => void }) {
+function SharedDetailPanel({ task, onClose, onCopied, closing }: { task: SharedTask; onClose: () => void; onCopied: () => void; closing: boolean }) {
   const [htmlMode, setHtmlMode] = useState<"html" | "url">("html");
   const [htmlPanelMode, setHtmlPanelMode] = useState<"general" | "kurly">("general");
   const images = task.images ?? [];
   const html = htmlPanelMode === "general" ? (task.html || generateGeneralHtml(images, task.brandKey)) : generateKurlyHtml(images, task.brandKey, task.kurlyEnabled !== false);
   const displayed = htmlMode === "html" ? html.split("\n").filter(Boolean) : [...html.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
   useEffect(() => { setHtmlMode("html"); setHtmlPanelMode("general"); }, [task.id]);
-  return <aside className="detail-panel saved-detail-panel share-detail-panel">
+  return <aside className={`detail-panel saved-detail-panel share-detail-panel${closing ? " is-closing" : ""}`}>
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X size={16} /></button></div>
     <div className="detail-body">
       <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b>{task.option && <><span>옵션</span><b>{task.option}</b></>}<span>거래처</span><b>{task.vendors?.join(", ") || "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
-      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" disabled={task.kurlyEnabled === false} className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight size={16} /></button><button type="button" className="copy-action" title="현재 내용 복사" aria-label="현재 내용 복사" disabled={!html.trim()} onClick={() => void copyText(displayed.join("\n"))}><Copy size={16} /></button></span></div><div className="code-box">{displayed.map((line, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${line}`}>{htmlMode === "url" ? <a href={line} target="_blank" rel="noopener noreferrer">{line}</a> : line}</p>)}</div></section>
-      <section className="detail-section paths"><h3>NAS 경로</h3><SharedPathRow label="썸네일" value={task.thumbnailNas ?? ""} /><SharedPathRow label="상세페이지" value={task.detailNas ?? ""} /><SharedPathRow label="촬영본" value={task.shootingNas ?? ""} /></section>
+      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" disabled={task.kurlyEnabled === false} className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight size={16} /></button><button type="button" className="copy-action" title="현재 내용 복사" aria-label="현재 내용 복사" disabled={!html.trim()} onClick={() => void copyText(displayed.join("\n")).then(onCopied)}><Copy size={16} /></button></span></div><div className="code-box">{displayed.map((line, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${line}`}>{htmlMode === "url" ? <a href={line} target="_blank" rel="noopener noreferrer">{line}</a> : line}</p>)}</div></section>
+      <section className="detail-section paths"><h3>NAS 경로</h3><SharedPathRow label="썸네일" value={task.thumbnailNas ?? ""} onCopied={onCopied} /><SharedPathRow label="상세페이지" value={task.detailNas ?? ""} onCopied={onCopied} /><SharedPathRow label="촬영본" value={task.shootingNas ?? ""} onCopied={onCopied} /></section>
     </div>
   </aside>;
 }
 
-function SharedPathRow({ label, value }: { label: string; value: string }) {
-  return <div className="path-row"><label>{label}</label><div>{value || "-"}</div><button type="button" aria-label={`${label} 경로 복사`} onClick={() => void copyText(value)}><Copy size={16} /> 복사</button></div>;
+function SharedPathRow({ label, value, onCopied }: { label: string; value: string; onCopied: () => void }) {
+  return <div className="path-row"><label>{label}</label><div>{value || "-"}</div>{value && <button type="button" aria-label={`${label} 경로 복사`} onClick={() => void copyText(value).then(onCopied)}><Copy size={16} /> 복사</button>}</div>;
 }
 
 export default function ShareViewer({ token }: { token: string }) {
   const [tasks, setTasks] = useState<SharedTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<SharedTask | null>(null);
+  const [detailClosing, setDetailClosing] = useState(false);
+  const detailCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [copyNotice, setCopyNotice] = useState("");
+  const copyNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     fetch(`/api/shares/${encodeURIComponent(token)}`).then(async (response) => {
       if (!response.ok) throw new Error("공유 링크가 없거나 만료되었습니다.");
@@ -76,8 +80,42 @@ export default function ShareViewer({ token }: { token: string }) {
     document.body.dataset.brand = activeBrandKey;
     return () => { delete document.body.dataset.brand; };
   }, [activeBrandKey]);
+  useEffect(() => () => {
+    if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current);
+    if (copyNoticeTimerRef.current) clearTimeout(copyNoticeTimerRef.current);
+  }, []);
+  const showCopyNotice = () => {
+    setCopyNotice("복사되었습니다.");
+    if (copyNoticeTimerRef.current) clearTimeout(copyNoticeTimerRef.current);
+    copyNoticeTimerRef.current = setTimeout(() => setCopyNotice(""), 1800);
+  };
+  const openDetail = (task: SharedTask) => {
+    if (detailCloseTimerRef.current) clearTimeout(detailCloseTimerRef.current);
+    detailCloseTimerRef.current = null;
+    setDetailClosing(false);
+    setSelectedTask(task);
+  };
+  const closeDetail = () => {
+    if (!selectedTask || detailClosing) return;
+    setDetailClosing(true);
+    detailCloseTimerRef.current = setTimeout(() => {
+      setSelectedTask(null);
+      setDetailClosing(false);
+      detailCloseTimerRef.current = null;
+    }, 180);
+  };
+  const handleTaskSelect = (task: SharedTask) => { if (selectedTask?.id === task.id) closeDetail(); else openDetail(task); };
+  useEffect(() => {
+    if (!selectedTask) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      if (!event.target.closest("tr, .detail-panel, .app-header")) closeDetail();
+    };
+    document.addEventListener("pointerdown", closeOnOutside, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutside, true);
+  }, [selectedTask]);
   const toggleGroup = (product: string) => setCollapsedGroups((current) => { const next = new Set(current); if (next.has(product)) next.delete(product); else next.add(product); return next; });
-  return <main className={`share-page brand-${activeBrandKey}`}><header className="app-header share-app-header"><div className="brand-heading"><div className="brand-switcher share-brand-switcher"><img src={activeBrandImage} alt="" /></div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>읽기 전용 공유 링크 · 편집할 수 없습니다.</p></div></div><div className="actions"><button type="button" className="share-header-copy" onClick={() => void copyText(window.location.href)}><Copy size={16} /> 링크 복사</button></div></header><div className={`workspace share-workspace ${selectedTask ? "with-detail" : ""}`}><section className={`table-shell${showOptionColumn ? " has-option-column" : ""}`}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/>{showOptionColumn && <col className="c-option"/>}<col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th>{showOptionColumn && <th>옵션</th>}<th>링크</th><th className="html-column">HTML / URL</th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "썸네일 Drive" : "썸네일 NAS"}</span><span className="table-header-label-compact">썸네일</span></th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "상세페이지 Drive" : "상세페이지 NAS"}</span><span className="table-header-label-compact">상세페이지</span></th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "촬영본 Drive" : "촬영본 NAS"}</span><span className="table-header-label-compact">촬영본</span></th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table className="share-table"><colgroup><col className="c-name"/><col className="c-type"/>{showOptionColumn && <col className="c-option"/>}<col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{loading ? <tr><td colSpan={tableColumnCount}><div className="share-empty">공유 정보를 불러오는 중입니다.</div></td></tr> : error ? <tr><td colSpan={tableColumnCount}><div className="share-empty error">{error}</div></td></tr> : groups.length === 0 ? <tr><td colSpan={tableColumnCount}><div className="share-empty">공유된 자산이 없습니다.</div></td></tr> : groups.map(([product, grouped], index) => <Fragment key={product}><tr className={`product-row tone-${index % 2}`} onClick={() => toggleGroup(product)}><td><button className="expand" type="button" aria-label={`${product} 하위 품목 ${collapsedGroups.has(product) ? "펼치기" : "접기"}`} onClick={(event) => { event.stopPropagation(); toggleGroup(product); }}>{collapsedGroups.has(product) ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</button><b>{product}</b></td><td><span className="count">{grouped.length}개</span></td>{showOptionColumn && <td />}<td /><td /><td className="nas-column"/><td className="nas-column"/><td className="nas-column"/><td /></tr>{!collapsedGroups.has(product) && grouped.map((task) => <tr className="item-row" key={task.id} onClick={() => setSelectedTask(task)}><td data-label="제품명">{task.product}</td><td data-label="품목">{task.item}</td>{showOptionColumn && <td data-label="옵션">{task.option}</td>}<td data-label="링크">{task.storeLink ? <a className="store-link" href={task.storeLink} target="_blank" rel="noopener noreferrer" title="자사몰 상품 열기" aria-label={`${task.product} ${task.item} 자사몰 상품 열기`} onClick={(event) => event.stopPropagation()}><ExternalLink size={18} /></a> : null}</td><td data-label="HTML" onClick={(event) => event.stopPropagation()}><SharedCopyCell value={task.html ?? ""} label={`${task.product} ${task.item} HTML`} /></td><td className="nas-column" data-label="썸네일 NAS" onClick={(event) => event.stopPropagation()}><SharedCopyCell value={task.thumbnailNas ?? ""} label="썸네일 NAS" /></td><td className="nas-column" data-label="상세페이지 NAS" onClick={(event) => event.stopPropagation()}><SharedCopyCell value={task.detailNas ?? ""} label="상세페이지 NAS" /></td><td className="nas-column" data-label="촬영본 NAS" onClick={(event) => event.stopPropagation()}><SharedCopyCell value={task.shootingNas ?? ""} label="촬영본 NAS" /></td><td data-label="참고사항"><div className="table-note"><div className="vendor-badges">{(task.vendors ?? []).map((vendor) => <span className={`vendor-badge ${vendorClass(vendor)}`} key={vendor}>{vendor}</span>)}</div>{task.note && <span className="table-note-text">{task.note}</span>}</div></td></tr>)}</Fragment>)}</tbody></table></div><footer><span className="table-summary">제품 {groups.length}개 · 품목 {tasks.length}개</span></footer></section>{selectedTask && <SharedDetailPanel task={selectedTask} onClose={() => setSelectedTask(null)} />}</div></main>;
+  return <main className={`share-page brand-${activeBrandKey}`}><header className="app-header share-app-header"><div className="brand-heading"><div className="brand-switcher share-brand-switcher"><img src={activeBrandImage} alt="" /></div><div className="app-title"><h1>Detail Page Asset Manager</h1><p>읽기 전용 공유 링크 · 편집할 수 없습니다.</p></div></div><div className="actions"><button type="button" className="share-header-copy" onClick={() => void copyText(window.location.href).then(showCopyNotice)}><Copy size={16} /> 링크 복사</button></div></header><div className={`workspace share-workspace ${selectedTask ? "with-detail" : ""}`}><section className={`table-shell${showOptionColumn ? " has-option-column" : ""}`} onClick={(event) => { const target = event.target as HTMLElement; if (selectedTask && !target.closest("tr,button,a")) closeDetail(); }}><div className="table-header"><table><colgroup><col className="c-name"/><col className="c-type"/>{showOptionColumn && <col className="c-option"/>}<col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><thead><tr><th>제품명</th><th>품목</th>{showOptionColumn && <th>옵션</th>}<th>링크</th><th className="html-column">HTML / URL</th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "썸네일 Drive" : "썸네일 NAS"}</span><span className="table-header-label-compact">썸네일</span></th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "상세페이지 Drive" : "상세페이지 NAS"}</span><span className="table-header-label-compact">상세페이지</span></th><th className="nas-column"><span className="table-header-label-full">{showOptionColumn ? "촬영본 Drive" : "촬영본 NAS"}</span><span className="table-header-label-compact">촬영본</span></th><th>참고사항</th></tr></thead></table></div><div className="table-scroll"><table className="share-table"><colgroup><col className="c-name"/><col className="c-type"/>{showOptionColumn && <col className="c-option"/>}<col className="c-link"/><col className="c-html"/><col className="c-nas"/><col className="c-nas"/><col className="c-nas"/><col className="c-note"/></colgroup><tbody>{loading ? <tr><td colSpan={tableColumnCount}><div className="share-empty">공유 정보를 불러오는 중입니다.</div></td></tr> : error ? <tr><td colSpan={tableColumnCount}><div className="share-empty error">{error}</div></td></tr> : groups.length === 0 ? <tr><td colSpan={tableColumnCount}><div className="share-empty">공유된 자산이 없습니다.</div></td></tr> : groups.map(([product, grouped], index) => <Fragment key={product}><tr className={`product-row tone-${index % 2}`} onClick={() => toggleGroup(product)}><td><button className="expand" type="button" aria-label={`${product} 하위 품목 ${collapsedGroups.has(product) ? "펼치기" : "접기"}`} onClick={(event) => { event.stopPropagation(); toggleGroup(product); }}>{collapsedGroups.has(product) ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</button><b>{product}</b></td><td><span className="count">{grouped.length}개</span></td>{showOptionColumn && <td />}<td /><td /><td className="nas-column"/><td className="nas-column"/><td className="nas-column"/><td /></tr>{!collapsedGroups.has(product) && grouped.map((task) => <tr className="item-row" key={task.id} onClick={() => handleTaskSelect(task)}><td data-label="제품명">{task.product}</td><td data-label="품목">{task.item}</td>{showOptionColumn && <td data-label="옵션">{task.option}</td>}<td data-label="링크">{task.storeLink ? <a className="store-link" href={task.storeLink} target="_blank" rel="noopener noreferrer" title="자사몰 상품 열기" aria-label={`${task.product} ${task.item} 자사몰 상품 열기`} onClick={(event) => event.stopPropagation()}><ExternalLink size={18} /></a> : null}</td><td data-label="HTML"><SharedCopyCell value={task.html ?? ""} label={`${task.product} ${task.item} HTML`} onCopied={showCopyNotice} /></td><td className="nas-column" data-label="썸네일 NAS"><SharedCopyCell value={task.thumbnailNas ?? ""} label="썸네일 NAS" onCopied={showCopyNotice} /></td><td className="nas-column" data-label="상세페이지 NAS"><SharedCopyCell value={task.detailNas ?? ""} label="상세페이지 NAS" onCopied={showCopyNotice} /></td><td className="nas-column" data-label="촬영본 NAS"><SharedCopyCell value={task.shootingNas ?? ""} label="촬영본 NAS" onCopied={showCopyNotice} /></td><td data-label="참고사항"><div className="table-note"><div className="vendor-badges">{(task.vendors ?? []).map((vendor) => <span className={`vendor-badge ${vendorClass(vendor)}`} key={vendor}>{vendor}</span>)}</div>{task.note && <span className="table-note-text">{task.note}</span>}</div></td></tr>)}</Fragment>)}</tbody></table></div><footer><span className="table-summary">제품 {groups.length}개 · 품목 {tasks.length}개</span></footer></section>{selectedTask && <SharedDetailPanel task={selectedTask} closing={detailClosing} onClose={closeDetail} onCopied={showCopyNotice} />}</div>{copyNotice && <div className="table-copy-toast" role="status">{copyNotice}</div>}</main>;
 }
 
 function vendorClass(vendor: string) {
