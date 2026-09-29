@@ -2237,7 +2237,8 @@ td:last-child {
   font-weight: 600;
 }
 .saved-detail-panel .html-link-actions > button.html-view-toggle,
-.saved-detail-panel .html-link-actions > button.copy-action {
+.saved-detail-panel .html-link-actions > button.copy-action,
+.saved-detail-panel .html-link-actions > button.preview-action {
   display: inline-flex !important;
   flex: 0 0 22px;
   width: 22px !important;
@@ -2254,12 +2255,14 @@ td:last-child {
   color: #74747a;
 }
 .saved-detail-panel .html-view-toggle:hover,
-.saved-detail-panel .copy-action:hover {
+.saved-detail-panel .copy-action:hover,
+.saved-detail-panel .preview-action:hover {
   color: var(--body);
   background: rgba(60, 60, 67, 0.07);
 }
 .saved-detail-panel .html-link-actions > button.html-view-toggle > svg,
-.saved-detail-panel .html-link-actions > button.copy-action > svg {
+.saved-detail-panel .html-link-actions > button.copy-action > svg,
+.saved-detail-panel .html-link-actions > button.preview-action > svg {
   display: block !important;
   flex: 0 0 16px;
   width: 16px !important;
@@ -2269,9 +2272,9 @@ td:last-child {
   color: #74747a !important;
   fill: none !important;
   stroke: #74747a !important;
-  stroke-width: 1.6;
   opacity: 1;
   overflow: visible;
+  shape-rendering: geometricPrecision;
 }
 .saved-detail-panel .html-link-actions [data-tooltip],
 .saved-detail-panel .path-row [data-tooltip] {
@@ -3264,6 +3267,7 @@ h1 {
 
 .saved-detail-panel .html-link-actions > button.html-view-toggle:hover,
 .saved-detail-panel .html-link-actions > button.copy-action:hover,
+.saved-detail-panel .html-link-actions > button.preview-action:hover,
 .saved-detail-panel .path-row button:hover {
   background: rgba(28, 126, 214, 0.08);
   color: var(--accent);

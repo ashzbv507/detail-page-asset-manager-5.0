@@ -72,6 +72,7 @@ function serverBrandSnapshot(): BrandKey {
 }
 
 const iconProps = { size: 16, strokeWidth: 1.75, "aria-hidden": true } as const;
+const htmlActionIconProps = { size: 16, strokeWidth: 1.5, absoluteStrokeWidth: true, "aria-hidden": true } as const;
 const VENDOR_OPTIONS = ["컬리 ONLY", "오집 ONLY", "퀸잇 ONLY", "현대 ONLY", "네이버 ONLY", "29cm ONLY"] as const;
 
 async function copyText(value: string) {
@@ -99,6 +100,7 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
   const [htmlPanelMode, setHtmlPanelMode] = useState<"general" | "kurly">("general");
   const [toastMessage, setToastMessage] = useState("");
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailPreviewVersionRef = useRef(Date.now());
   const images = task.images ?? [];
   const activeHtml = htmlPanelMode === "general" ? task.html || generateGeneralHtml(images, task.brandKey) : generateKurlyHtml(images, task.brandKey, task.kurlyEnabled !== false);
   const displayedHtmlLinks = htmlMode === "html" ? activeHtml.split("\n").filter(Boolean) : [...activeHtml.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match) => match[1]);
@@ -110,11 +112,31 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
     toastTimerRef.current = setTimeout(() => setToastMessage(""), 1800);
   };
   const copyPanelText = async (value: string) => { await copyText(value); showToast("복사되었습니다."); };
+  const openDetailHtmlPreview = () => {
+    const previewImages: ImageAsset[] = [...activeHtml.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match, index) => {
+      const url = match[1];
+      let name = `image-${index + 1}`;
+      try { name = decodeURIComponent(new URL(url).pathname.split("/").pop() || name); } catch { /* Keep the fallback name. */ }
+      return { id: `detail-preview-${index}-${url}`, name, url };
+    });
+    if (!previewImages.length) { showToast("미리보기할 이미지가 없습니다."); return; }
+    try {
+      const version = Math.max(Date.now(), detailPreviewVersionRef.current + 1);
+      detailPreviewVersionRef.current = version;
+      window.localStorage.setItem(HTML_PREVIEW_STORAGE_KEY, JSON.stringify(createHtmlPreviewPayload(htmlPanelMode, previewImages, version)));
+    } catch {
+      showToast("새 창 미리보기 데이터를 준비하지 못했습니다.");
+      return;
+    }
+    const previewWindow = window.open("/html-preview", HTML_PREVIEW_WINDOW_NAME);
+    if (!previewWindow) { showToast("팝업이 차단되었습니다. 팝업을 허용해 주세요."); return; }
+    previewWindow.focus();
+  };
   return <aside className={`detail-panel saved-detail-panel${closing ? " is-closing" : ""}`}>
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="edit" onClick={onEdit}>편집</button><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X {...iconProps} /></button></div>
     <div className="detail-body">
       <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b>{task.option && <><span>옵션</span><b>{task.option}</b></>}<span>거래처</span><b className="vendor-badges">{task.vendors?.length ? task.vendors.map((vendor) => <span className={`vendor-badge ${vendorClass(vendor)}`} key={vendor}>{vendor}</span>) : "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
-      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" disabled={task.kurlyEnabled === false} className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" data-tooltip={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight {...iconProps} /></button><button type="button" className="copy-action" data-tooltip="현재 내용 복사" title="현재 내용 복사" aria-label="현재 내용 복사" disabled={!activeHtml.trim()} onClick={() => void copyPanelText(displayedHtmlLinks.join("\n"))}><Copy {...iconProps} /></button></span></div><div className="code-box">{displayedHtmlLinks.map((link, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${link}`}>{htmlMode === "url" ? <a href={link} target="_blank" rel="noopener noreferrer">{link}</a> : link}</p>)}</div></section>
+      <section className="detail-section html-section"><div className="section-title"><div className="html-section-heading"><h3>HTML 링크</h3><span className="html-mode-tabs"><button type="button" className={htmlPanelMode === "general" ? "active" : ""} onClick={() => { setHtmlPanelMode("general"); setHtmlMode("html"); }}>기본</button><button type="button" disabled={task.kurlyEnabled === false} className={htmlPanelMode === "kurly" ? "active" : ""} onClick={() => { setHtmlPanelMode("kurly"); setHtmlMode("html"); }}>컬리용</button></span></div><span className="html-link-actions"><button type="button" className="html-view-toggle" data-tooltip={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} title={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} aria-label={htmlMode === "html" ? "URL로 전환" : "HTML로 전환"} onClick={() => setHtmlMode((current) => current === "html" ? "url" : "html")}><ArrowLeftRight {...htmlActionIconProps} /></button><button type="button" className="copy-action" data-tooltip="현재 내용 복사" title="현재 내용 복사" aria-label="현재 내용 복사" disabled={!activeHtml.trim()} onClick={() => void copyPanelText(displayedHtmlLinks.join("\n"))}><Copy {...htmlActionIconProps} /></button><button type="button" className="preview-action" data-tooltip="새 창 미리보기" title="새 창 미리보기" aria-label="현재 HTML 새 창에서 미리보기" disabled={!activeHtml.trim()} onClick={openDetailHtmlPreview}><ExternalLink {...htmlActionIconProps} /></button></span></div><div className="code-box">{displayedHtmlLinks.map((link, index) => <p key={`${htmlPanelMode}-${htmlMode}-${index}-${link}`}>{htmlMode === "url" ? <a href={link} target="_blank" rel="noopener noreferrer">{link}</a> : link}</p>)}</div></section>
       <section className="detail-section paths"><h3>NAS 경로</h3><PathRow label="썸네일" value={task.thumbnailNas} onCopied={showToast} /><PathRow label="상세페이지" value={task.detailNas} onCopied={showToast} /><PathRow label="촬영본" value={task.shootingNas} onCopied={showToast} /></section>
     </div>
     {toastMessage && <div className="detail-copy-toast" role="status">{toastMessage}</div>}

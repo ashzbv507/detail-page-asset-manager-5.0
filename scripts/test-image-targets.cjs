@@ -121,6 +121,11 @@ test('Serendiment HTML uses its dedicated production image host', () => {
   assert.match(generateGeneralHtml([image('sample.jpg', 'common')], 'serendiment'), /img\.sommandco\.co\.kr\/images\/serendiment\/sample\.jpg/);
 });
 
+test('Sommier HTML uses its dedicated production image host', () => {
+  assert.equal(buildImageUrl('sample.jpg', 'sommier'), 'https://img.sommandco.co.kr/images/sommier/sample.jpg');
+  assert.match(generateGeneralHtml([image('sample.jpg', 'common')], 'sommier'), /img\.sommandco\.co\.kr\/images\/sommier\/sample\.jpg/);
+});
+
 test('existing exclusions, URL markers, and every target transition remain compatible', () => {
   assert.equal(getImageHtmlTarget({}), 'common');
   assert.equal(getImageHtmlTarget({ excludeFromKurly: true }), 'general');

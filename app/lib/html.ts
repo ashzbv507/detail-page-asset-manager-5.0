@@ -8,7 +8,7 @@ const IMAGE_URL_RULES: Record<BrandKey, ImageUrlRule> = {
   amante: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
   imbedding: { baseUrl: "http://img.imbedding.co.kr/images/", quote: '"' },
   serendiment: { baseUrl: "https://img.sommandco.co.kr/images/serendiment/", quote: "'" },
-  sommier: { baseUrl: "https://img.amante.co.kr/images/ani_img/", quote: "'" },
+  sommier: { baseUrl: "https://img.sommandco.co.kr/images/sommier/", quote: "'" },
 };
 
 export function buildImageUrl(filename: string, brandKey: BrandKey = "amante") {
