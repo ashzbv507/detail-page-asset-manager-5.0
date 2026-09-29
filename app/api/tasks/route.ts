@@ -1,6 +1,6 @@
 import { buildImageUrl, generateKurlyHtml } from "../../lib/html";
 import { decodeStoredImageUrl, encodeStoredImageUrl } from "../../lib/image-target";
-import { TASK_CONFLICT_COLUMNS, taskDuplicatePath } from "../../lib/task-identity";
+import { normalizeTaskVendors, TASK_CONFLICT_COLUMNS, taskDuplicatePath } from "../../lib/task-identity";
 import type { BrandKey, ImageHtmlTarget } from "../../lib/task-types";
 
 type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; htmlTarget?: ImageHtmlTarget; excludeFromKurly?: boolean };
@@ -42,7 +42,7 @@ type DatabaseRow = {
 
 const BRAND_KEYS = ["amante", "imbedding", "serendiment", "sommier"] as const;
 
-const NOTE_MIGRATION_MESSAGE = "참고사항별 별도 등록을 사용하려면 Supabase에서 docs/supabase-task-note-identity.sql을 먼저 실행해 주세요.";
+const NOTE_MIGRATION_MESSAGE = "거래처·참고사항별 별도 등록을 사용하려면 Supabase에서 docs/supabase-task-note-identity.sql을 먼저 실행해 주세요.";
 
 class DatabaseError extends Error {
   constructor(public code: string | undefined, status: number) {
@@ -94,7 +94,7 @@ function toRow(payload: TaskPayload): DatabaseRow {
   if (!productName || !itemName) throw new Error("제품명과 품목은 필수입니다.");
   const brandKey = brand(payload.brandKey) as BrandKey;
   const images = Array.isArray(payload.images) ? payload.images.map((image) => storedImageUrl(image, brandKey)).filter(Boolean) : list(payload.imageUrls);
-  return { id: text(payload.id) || crypto.randomUUID(), brand_key: brandKey, product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), shooting_nas: text(payload.shootingNas), kurly_enabled: payload.kurlyEnabled !== false, vendors: list(payload.vendors), note: text(payload.note) };
+  return { id: text(payload.id) || crypto.randomUUID(), brand_key: brandKey, product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), shooting_nas: text(payload.shootingNas), kurly_enabled: payload.kurlyEnabled !== false, vendors: normalizeTaskVendors(payload.vendors), note: text(payload.note) };
 }
 function toClient(row: DatabaseRow) {
   const images = (row.image_urls ?? []).map((storedUrl, index) => {
@@ -105,7 +105,7 @@ function toClient(row: DatabaseRow) {
 }
 function failure(error: unknown) {
   if (error instanceof DatabaseError && error.code === "42P10") return Response.json({ error: NOTE_MIGRATION_MESSAGE }, { status: 503 });
-  if (error instanceof DatabaseError && error.code === "23505") return Response.json({ error: "동일 제품명·품목·옵션·참고사항의 작업이 이미 있습니다. 참고사항을 다르게 입력해 주세요." }, { status: 409 });
+  if (error instanceof DatabaseError && error.code === "23505") return Response.json({ error: "동일 제품명·품목·옵션·거래처·참고사항의 작업이 이미 있습니다. 거래처 또는 참고사항을 다르게 입력해 주세요." }, { status: 409 });
   const message = error instanceof Error ? error.message : "Supabase 연결 중 오류가 발생했습니다.";
   return Response.json({ error: message }, { status: message.includes("환경 변수") || message === NOTE_MIGRATION_MESSAGE ? 503 : message.includes("필수") ? 400 : 502 });
 }
@@ -116,7 +116,7 @@ async function findDuplicate(row: DatabaseRow) {
 }
 
 function duplicateFailure() {
-  return Response.json({ error: "제품명·품목·옵션·참고사항이 동일한 작업이 이미 있습니다.", code: "DUPLICATE_TASK" }, { status: 409 });
+  return Response.json({ error: "제품명·품목·옵션·거래처·참고사항이 동일한 작업이 이미 있습니다.", code: "DUPLICATE_TASK" }, { status: 409 });
 }
 
 export async function GET(request: Request) {
@@ -139,8 +139,8 @@ export async function POST(request: Request) {
       const duplicate = await findDuplicate(row);
       if (duplicate && !body.overwrite) return duplicateFailure();
       if (duplicate) {
-        // Overwrite only the exact five-field match explicitly confirmed by
-        // the user, never a different-note row with the same product/item.
+        // Overwrite only the exact six-field match explicitly confirmed by
+        // the user, never a different-vendor or different-note row.
         const response = await supabaseRequest(`asset_tasks?id=eq.${encodeURIComponent(duplicate.id)}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ ...row, id: duplicate.id }) });
         return Response.json({ tasks: (await response.json() as DatabaseRow[]).map(toClient) });
       }
