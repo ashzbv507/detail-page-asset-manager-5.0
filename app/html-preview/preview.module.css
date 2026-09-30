@@ -72,9 +72,6 @@
 @media (max-width: 700px) {
   .toolbar { padding: 8px 12px; gap: 8px; }
   .title { width: 100%; }
-  .controls { width: 100%; }
-  .zoomControls { flex: 1 1 100%; }
-  .toolbar input { flex: 1; width: auto; }
-  .presets { justify-content: flex-end; width: 100%; }
+  .controls { display: none; }
   .stage { padding-top: 16px; }
 }
