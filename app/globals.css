@@ -1782,7 +1782,8 @@ td:last-child {
   text-align: left;
 }
 .item-select-menu button:hover,
-.item-select-menu button:focus {
+.item-select-menu button:focus,
+.item-select-menu button.is-active {
   background: var(--color-surface-soft);
   outline: 0;
 }

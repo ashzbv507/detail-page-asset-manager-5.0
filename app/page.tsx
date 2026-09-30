@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
 import { generateGeneralHtml, generateKurlyHtml, withPreviewImageVersion } from "./lib/html";
 import { productGroupLabel } from "./lib/product-grouping";
@@ -206,9 +206,49 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const [saveError, setSaveError] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+  const modalRootRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLElement>(null);
   const [initialValues] = useState(() => JSON.stringify({ draft, images }));
   const dirty = useMemo(() => JSON.stringify({ draft, images }) !== initialValues, [draft, images, initialValues]);
   const requestClose = () => { if (!savingRef.current) { if (dirty) setConfirmDiscard(true); else onClose(); } };
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusFrame = requestAnimationFrame(() => {
+      modalRef.current?.querySelector<HTMLInputElement>('[data-field="제품명"] input')?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
+  const handleModalKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (confirmOverwrite) setConfirmOverwrite(false);
+      else if (confirmDiscard) setConfirmDiscard(false);
+      else requestClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusScope = modalRootRef.current?.querySelector<HTMLElement>("dialog[open]") ?? modalRef.current;
+    const focusable = Array.from(focusScope?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])') ?? [])
+      .filter((element) => element.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      focusScope?.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
   useEffect(() => {
     if (!dirty && !saving) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -358,7 +398,7 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
       setSaveError(error instanceof Error ? error.message : "저장하지 못했습니다. 다시 시도해 주세요.");
     } finally { savingRef.current = false; setSaving(false); }
   };
-  return <div className="modal-backdrop" role="presentation"><section className={`modal ${step === 1 ? "compact" : "wide"} brand-${brandKey}`} role="dialog" aria-modal="true" aria-label="새 작업 생성">
+  return <div ref={modalRootRef} className="modal-backdrop" role="presentation" onKeyDown={handleModalKeyDown}><section ref={modalRef} className={`modal ${step === 1 ? "compact" : "wide"} brand-${brandKey}`} role="dialog" aria-modal="true" aria-label="새 작업 생성" tabIndex={-1}>
     <header><h2><Plus {...iconProps} /> {initialTask ? "작업 편집" : "새 작업 생성"}</h2><div className="modal-actions"><button className="modal-action modal-action-secondary" disabled={saving} onClick={requestClose}>취소 <X {...iconProps} /></button>{step === 1 ? <><button className="modal-action modal-action-secondary" disabled={saving} onClick={onNext}>{initialTask ? "HTML 편집" : "HTML 생성"} <ArrowRight {...iconProps} /></button>{initialTask && <button className="modal-action modal-action-primary" disabled={saving} onClick={() => void saveTask()}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</> : <button className="modal-action modal-action-primary" disabled={saving} onClick={() => void saveTask()}>{saving ? "저장 중..." : "저장"} <Check {...iconProps} /></button>}</div></header>
     {step === 1 ? <div className="step-one">
       <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField brandKey={brandKey} value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="옵션" placeholder="색상, 구성 등을 입력하세요" value={draft.option} onChange={(value) => setDraft((current) => ({ ...current, option: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => { const selected = draft.vendors.includes(vendor); return <button key={vendor} type="button" className={`${vendorClass(vendor)}${selected ? " active" : ""}`} aria-pressed={selected} onClick={() => toggleVendor(vendor)}>{vendor}</button>; })}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
@@ -452,14 +492,64 @@ function matchesItem(value: string, query: string) {
 
 function ItemSelectField({ brandKey, value, onChange }: { brandKey: BrandKey; value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const fieldRef = useRef<HTMLDivElement>(null);
-  const filteredGroups = itemGroupsForBrand(brandKey).map((group) => ({ ...group, items: group.items.filter((item) => matchesItem(item, value)) })).filter((group) => group.items.length > 0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+  const filteredGroups = useMemo(() => itemGroupsForBrand(brandKey).map((group) => ({ ...group, items: group.items.filter((item) => matchesItem(item, value)) })).filter((group) => group.items.length > 0), [brandKey, value]);
+  const filteredItems = useMemo(() => filteredGroups.flatMap((group) => group.items), [filteredGroups]);
+  const selectItem = (item: string) => {
+    onChange(item);
+    setOpen(false);
+    setActiveIndex(-1);
+    inputRef.current?.focus();
+  };
   useEffect(() => {
     const close = (event: PointerEvent) => { if (event.target instanceof Node && !fieldRef.current?.contains(event.target)) setOpen(false); };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, []);
-  return <label className="field item-select-field"><span>품목</span><div ref={fieldRef} className="item-select-control"><Search className="field-search" {...iconProps} /><input value={value} onFocus={() => setOpen(true)} onChange={(event) => { onChange(event.target.value); setOpen(true); }} placeholder="품목명을 검색하거나 선택하세요" aria-label="품목 검색" aria-expanded={open} /><ChevronDown {...iconProps} />{open && <div className="item-select-menu" role="listbox">{filteredGroups.length ? filteredGroups.map((group) => <div className="item-select-group" key={group.label}><div className="item-select-group-label">[{group.label}]</div>{group.items.map((item) => <button type="button" key={item} role="option" onClick={() => { onChange(item); setOpen(false); }}>{item}</button>)}</div>) : <span>검색 결과가 없습니다.</span>}</div>}</div></label>;
+  useEffect(() => {
+    if (!open) return;
+    const selectedIndex = filteredItems.findIndex((item) => item === value);
+    setActiveIndex(selectedIndex);
+  }, [filteredItems, open, value]);
+  useEffect(() => {
+    if (!open || activeIndex < 0) return;
+    listboxRef.current?.querySelector<HTMLElement>(`#${CSS.escape(`${listboxId}-option-${activeIndex}`)}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, listboxId, open]);
+  const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      setOpen(true);
+      setActiveIndex((current) => {
+        if (!filteredItems.length) return -1;
+        if (!open || current < 0) return direction > 0 ? 0 : filteredItems.length - 1;
+        return (current + direction + filteredItems.length) % filteredItems.length;
+      });
+      return;
+    }
+    if (event.key === "Enter" && open && activeIndex >= 0) {
+      const activeItem = filteredItems[activeIndex];
+      if (activeItem) {
+        event.preventDefault();
+        selectItem(activeItem);
+      }
+      return;
+    }
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      setActiveIndex(-1);
+    } else if (event.key === "Tab") {
+      setOpen(false);
+      setActiveIndex(-1);
+    }
+  };
+  return <label className="field item-select-field"><span>품목</span><div ref={fieldRef} className="item-select-control"><Search className="field-search" {...iconProps} /><input ref={inputRef} role="combobox" value={value} onFocus={() => setOpen(true)} onKeyDown={handleInputKeyDown} onChange={(event) => { onChange(event.target.value); setOpen(true); }} placeholder="품목명을 검색하거나 선택하세요" aria-label="품목 검색" aria-autocomplete="list" aria-haspopup="listbox" aria-controls={listboxId} aria-expanded={open} aria-activedescendant={open && activeIndex >= 0 && activeIndex < filteredItems.length ? `${listboxId}-option-${activeIndex}` : undefined} /><ChevronDown {...iconProps} />{open && <div ref={listboxRef} id={listboxId} className="item-select-menu" role="listbox" aria-label="품목 선택">{filteredGroups.length ? filteredGroups.map((group, groupIndex) => <div className="item-select-group" role="group" aria-labelledby={`${listboxId}-group-${groupIndex}`} key={group.label}><div id={`${listboxId}-group-${groupIndex}`} className="item-select-group-label">[{group.label}]</div>{group.items.map((item) => { const itemIndex = filteredItems.indexOf(item); return <button id={`${listboxId}-option-${itemIndex}`} className={activeIndex === itemIndex ? "is-active" : ""} type="button" tabIndex={-1} key={item} role="option" aria-selected={value === item} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActiveIndex(itemIndex)} onClick={() => selectItem(item)}>{item}</button>; })}</div>) : <span role="status">검색 결과가 없습니다.</span>}</div>}</div></label>;
 }
 
 export default function Home() {
