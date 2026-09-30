@@ -2451,6 +2451,9 @@ td:last-child {
   color: var(--accent);
   font-weight: 700;
 }
+.share-selected-items {
+  display: none;
+}
 .share-actions {
   display: inline-flex;
   align-items: center;
@@ -3657,6 +3660,10 @@ h1 {
     white-space: normal;
   }
 
+  .table-scroll .item-row.share-selected > td {
+    background: color-mix(in srgb, var(--accent) 11%, var(--color-surface-row)) !important;
+  }
+
   .table-scroll .item-row > td[data-label="제품명"],
   .table-scroll .item-row > td[data-label="품목"],
   .table-scroll .item-row > td[data-label="옵션"],
@@ -3741,6 +3748,109 @@ h1 {
 
   .share-selection-hint > span {
     display: none;
+  }
+
+  .table-shell:has(> footer.share-mode-footer.has-share-selection) .table-scroll {
+    bottom: 94px;
+  }
+
+  .table-shell:has(> footer.share-mode-footer.has-share-selection.has-share-message) .table-scroll {
+    bottom: 116px;
+  }
+
+  .table-shell > footer.share-mode-footer.has-share-selection {
+    display: grid;
+    height: 94px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 34px 40px;
+    gap: 4px 8px;
+    align-content: center;
+    padding: 8px 10px;
+  }
+
+  .table-shell > footer.share-mode-footer.has-share-selection.has-share-message {
+    height: 116px;
+    grid-template-rows: 34px 40px 18px;
+    row-gap: 4px;
+  }
+
+  .share-selected-items {
+    display: flex;
+    min-width: 0;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .share-selected-items::-webkit-scrollbar {
+    display: none;
+  }
+
+  .share-selected-chip {
+    display: inline-flex;
+    min-width: 0;
+    max-width: min(240px, 78vw);
+    height: 32px;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    padding: 0 9px;
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--hairline));
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--accent) 7%, #fff);
+    color: var(--body);
+    font: inherit;
+    font-size: 11px;
+    line-height: 16px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .share-selected-chip > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .share-selected-chip > svg {
+    flex: 0 0 auto;
+    color: var(--muted);
+  }
+
+  .share-selected-chip:active:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 13%, #fff);
+  }
+
+  .share-selected-chip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .share-selected-chip:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+
+  .share-mode-footer.has-share-selection .share-selection-hint {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 0;
+  }
+
+  .share-mode-footer.has-share-selection .share-actions {
+    grid-column: 2;
+    grid-row: 2;
+    margin: 0;
+  }
+
+  .share-mode-footer.has-share-selection .share-message {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: center;
   }
 
   .share-button,
