@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, ChevronDown, ChevronRight, Copy, ExternalLink, X } from "lucide-react";
 import { generateGeneralHtml, generateKurlyHtml } from "../../lib/html";
-import { createHtmlPreviewPayload, HTML_PREVIEW_STORAGE_KEY, HTML_PREVIEW_WINDOW_NAME } from "../../lib/html-preview";
+import { createHtmlPreviewPayload, openHtmlPreviewTab } from "../../lib/html-preview";
 import { productGroupLabel } from "../../lib/product-grouping";
 import type { AssetImage, BrandKey } from "../../lib/task-types";
 
@@ -47,17 +47,11 @@ function SharedDetailPanel({ task, onClose, onCopied, onNotice, closing }: { tas
       return { id: `shared-preview-${index}-${url}`, name, url };
     });
     if (!previewImages.length) { onNotice("미리보기할 이미지가 없습니다."); return; }
-    try {
-      const version = Math.max(Date.now(), previewVersionRef.current + 1);
-      previewVersionRef.current = version;
-      window.localStorage.setItem(HTML_PREVIEW_STORAGE_KEY, JSON.stringify(createHtmlPreviewPayload(htmlPanelMode, previewImages, version)));
-    } catch {
-      onNotice("새 창 미리보기 데이터를 준비하지 못했습니다.");
-      return;
-    }
-    const previewWindow = window.open("/html-preview", HTML_PREVIEW_WINDOW_NAME);
-    if (!previewWindow) { onNotice("팝업이 차단되었습니다. 팝업을 허용해 주세요."); return; }
-    previewWindow.focus();
+    const version = Math.max(Date.now(), previewVersionRef.current + 1);
+    previewVersionRef.current = version;
+    const result = openHtmlPreviewTab(createHtmlPreviewPayload(htmlPanelMode, previewImages, version));
+    if (result === "popup-blocked") onNotice("팝업이 차단되었습니다. 팝업을 허용해 주세요.");
+    else if (result === "storage-unavailable") onNotice("새 창 미리보기 데이터를 준비하지 못했습니다.");
   };
   return <aside className={`detail-panel saved-detail-panel share-detail-panel${closing ? " is-closing" : ""}`}>
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X size={16} /></button></div>

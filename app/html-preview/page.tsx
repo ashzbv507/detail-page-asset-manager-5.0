@@ -2,14 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
-import { HTML_PREVIEW_STORAGE_KEY, parseHtmlPreviewPayload, previewImageUrl, type HtmlPreviewPayload } from "../lib/html-preview";
+import { readHtmlPreviewSnapshot, previewImageUrl, type HtmlPreviewPayload } from "../lib/html-preview";
 import { capturePreviewAnchor, clampPreviewZoom, fitPreviewZoom, previewAnchorDelta, PREVIEW_BASE_WIDTH, PREVIEW_MIN_ZOOM, PREVIEW_MAX_ZOOM, PREVIEW_ZOOM_STEP, type PreviewAnchor } from "../lib/preview-zoom";
 import styles from "./preview.module.css";
-
-function readLatestPayload() {
-  const payload = parseHtmlPreviewPayload(window.localStorage.getItem(HTML_PREVIEW_STORAGE_KEY));
-  return payload ? { ...payload, version: Math.max(payload.version, Date.now()) } : null;
-}
 
 export default function HtmlPreviewPage() {
   const [payload, setPayload] = useState<HtmlPreviewPayload | null>(null);
@@ -70,14 +65,10 @@ export default function HtmlPreviewPage() {
   useEffect(() => {
     document.documentElement.classList.add("html-preview-document");
     document.body.classList.add("html-preview-document");
-    const update = () => setPayload(readLatestPayload());
-    const sync = (event: StorageEvent) => {
-      if (event.key === HTML_PREVIEW_STORAGE_KEY) update();
-    };
-    update();
-    window.addEventListener("storage", sync);
+    // Read this tab's immutable snapshot once. Opening/editing another
+    // product must never replace the content of an existing preview tab.
+    try { setPayload(readHtmlPreviewSnapshot(window.sessionStorage)); } catch { setPayload(null); }
     return () => {
-      window.removeEventListener("storage", sync);
       document.documentElement.classList.remove("html-preview-document");
       document.body.classList.remove("html-preview-document");
     };

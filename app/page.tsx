@@ -12,7 +12,7 @@ import { matchesSearchText, matchesTaskSearch, normalizeSearch } from "./lib/tas
 import { mergeSavedTask } from "./lib/task-state";
 import { reorderByDrop, type DropPosition } from "./lib/image-order";
 import { dragAutoScrollVelocity, DRAG_SCROLL_HORIZONTAL_TOLERANCE, DRAG_SCROLL_VERTICAL_TOLERANCE } from "./lib/drag-auto-scroll";
-import { createHtmlPreviewPayload, HTML_PREVIEW_STORAGE_KEY, HTML_PREVIEW_WINDOW_NAME, type HtmlPreviewMode } from "./lib/html-preview";
+import { createHtmlPreviewPayload, openHtmlPreviewTab, type HtmlPreviewMode } from "./lib/html-preview";
 
 type DetailTask = {
   id?: string;
@@ -120,17 +120,11 @@ function DetailPanel({ task, onClose, onEdit, closing }: { task: DetailTask; onC
       return { id: `detail-preview-${index}-${url}`, name, url };
     });
     if (!previewImages.length) { showToast("미리보기할 이미지가 없습니다."); return; }
-    try {
-      const version = Math.max(Date.now(), detailPreviewVersionRef.current + 1);
-      detailPreviewVersionRef.current = version;
-      window.localStorage.setItem(HTML_PREVIEW_STORAGE_KEY, JSON.stringify(createHtmlPreviewPayload(htmlPanelMode, previewImages, version)));
-    } catch {
-      showToast("새 창 미리보기 데이터를 준비하지 못했습니다.");
-      return;
-    }
-    const previewWindow = window.open("/html-preview", HTML_PREVIEW_WINDOW_NAME);
-    if (!previewWindow) { showToast("팝업이 차단되었습니다. 팝업을 허용해 주세요."); return; }
-    previewWindow.focus();
+    const version = Math.max(Date.now(), detailPreviewVersionRef.current + 1);
+    detailPreviewVersionRef.current = version;
+    const result = openHtmlPreviewTab(createHtmlPreviewPayload(htmlPanelMode, previewImages, version));
+    if (result === "popup-blocked") showToast("팝업이 차단되었습니다. 팝업을 허용해 주세요.");
+    else if (result === "storage-unavailable") showToast("새 창 미리보기 데이터를 준비하지 못했습니다.");
   };
   return <aside className={`detail-panel saved-detail-panel${closing ? " is-closing" : ""}`}>
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="edit" onClick={onEdit}>편집</button><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X {...iconProps} /></button></div>
@@ -193,8 +187,6 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const dragScrollFrameRef = useRef<number | null>(null);
   const dragScrollLastFrameTimeRef = useRef<number | null>(null);
   const dragScrollVelocityRef = useRef(0);
-  const htmlPreviewWindowRef = useRef<Window | null>(null);
-  const htmlPreviewModeRef = useRef<HtmlPreviewMode | null>(null);
   const htmlPreviewVersionRef = useRef(Date.now());
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -329,36 +321,13 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const generalHtml = preserveStoredHtml ? draft.detailHtml : generatedHtml;
   const generalImages = useMemo(() => imagesForHtmlTarget(images, "general"), [images]);
   const kurlyImages = useMemo(() => draft.kurlyEnabled ? imagesForHtmlTarget(images, "kurly") : [], [images, draft.kurlyEnabled]);
-  const publishHtmlPreview = useCallback((mode: HtmlPreviewMode) => {
+  const openHtmlPreview = (mode: HtmlPreviewMode) => {
     const version = Math.max(Date.now(), htmlPreviewVersionRef.current + 1);
     htmlPreviewVersionRef.current = version;
     const previewImages = mode === "general" ? generalImages : kurlyImages;
-    try {
-      window.localStorage.setItem(HTML_PREVIEW_STORAGE_KEY, JSON.stringify(createHtmlPreviewPayload(mode, previewImages, version)));
-      setHtmlPreviewError("");
-      return true;
-    } catch {
-      setHtmlPreviewError("새 창 미리보기 데이터를 준비하지 못했습니다.");
-      return false;
-    }
-  }, [generalImages, kurlyImages]);
-  const openHtmlPreview = (mode: HtmlPreviewMode) => {
-    htmlPreviewModeRef.current = mode;
-    if (!publishHtmlPreview(mode)) return;
-    let previewWindow = htmlPreviewWindowRef.current;
-    if (!previewWindow || previewWindow.closed) {
-      previewWindow = window.open("/html-preview", HTML_PREVIEW_WINDOW_NAME);
-      htmlPreviewWindowRef.current = previewWindow;
-    }
-    if (!previewWindow) {
-      setHtmlPreviewError("팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요.");
-      return;
-    }
-    previewWindow.focus();
+    const result = openHtmlPreviewTab(createHtmlPreviewPayload(mode, previewImages, version));
+    setHtmlPreviewError(result === "popup-blocked" ? "팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요." : result === "storage-unavailable" ? "새 창 미리보기 데이터를 준비하지 못했습니다." : "");
   };
-  useEffect(() => {
-    if (htmlPreviewModeRef.current) publishHtmlPreview(htmlPreviewModeRef.current);
-  }, [publishHtmlPreview]);
   const refreshImagePreviews = () => setPreviewVersion((current) => current + 1);
   const sortImages = (items: ImageAsset[]) => [...items].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" }));
   const addFiles = (files: FileList | null) => {
