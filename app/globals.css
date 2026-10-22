@@ -970,6 +970,13 @@ td:last-child {
 .vendor-29cm { color: var(--color-vendor-gray); background: var(--color-vendor-gray-soft); }
 .vendor-hyundai { color: var(--color-vendor-orange); background: var(--color-vendor-orange-soft); }
 .vendor-default { color: #666; background: #f5f5f6; }
+.table-scroll .item-row > td[data-label="참고사항"] {
+  height: auto;
+  padding-block: 10px;
+  vertical-align: middle;
+  white-space: normal;
+  text-overflow: clip;
+}
 .table-note {
   display: flex;
   flex-wrap: wrap;
@@ -977,10 +984,22 @@ td:last-child {
   gap: 4px;
   min-width: 0;
 }
+.table-note > .vendor-badges {
+  min-width: 0;
+  max-width: 100%;
+}
+.table-note > .vendor-badges:empty {
+  display: none;
+}
 .table-note-text {
+  min-width: 0;
+  max-width: 100%;
   color: #65656a;
   font-size: inherit;
   line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 .detail-meta span,
 .path-row > span {

@@ -56,7 +56,7 @@ function SharedDetailPanel({ task, onClose, onCopied, onNotice, closing }: { tas
   return <aside className={`detail-panel saved-detail-panel share-detail-panel${closing ? " is-closing" : ""}`}>
     <div className="detail-tabs"><button className="active">제품 정보</button><span /><button className="close" aria-label="상세 패널 닫기" onClick={onClose}><X size={16} /></button></div>
     <div className="detail-body">
-      <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b>{task.option && <><span>옵션</span><b>{task.option}</b></>}<span>거래처</span><b>{task.vendors?.join(", ") || "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
+      <div className="info-grid"><span>제품명</span><b>{task.product}</b><span>품목</span><b>{task.item}</b>{task.brandKey === "serendiment" && task.option && <><span>옵션</span><b>{task.option}</b></>}<span>거래처</span><b>{task.vendors?.join(", ") || "-"}</b><span>링크</span>{task.storeLink ? <a href={task.storeLink} target="_blank" rel="noopener noreferrer">열기</a> : <b>-</b>}<span>참고사항</span><b className="wide">{task.note || "-"}</b></div>
       <section className="detail-section html-section">
         <div className="section-title">
           <div className="html-section-heading">
