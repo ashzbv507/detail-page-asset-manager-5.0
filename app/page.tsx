@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronRight, Copy, ExternalLink, ImagePlus, Plus, Search, Share2, Trash2, X } from "lucide-react";
 import { generateGeneralHtml, generateKurlyHtml, withPreviewImageVersion } from "./lib/html";
 import { productGroupLabel } from "./lib/product-grouping";
 import { getImageHtmlTarget, imagesForHtmlTarget } from "./lib/image-target";
 import type { AssetImage, ImageHtmlTarget } from "./lib/task-types";
-import { ImageTargetSelect } from "./components/ImageTargetSelect";
+import { SortableImageList } from "./components/SortableImageList";
 import { HtmlCodeDrawer } from "./components/HtmlCodeDrawer";
 import { matchesSearchText, matchesTaskSearch, normalizeSearch } from "./lib/task-search";
 import { mergeSavedTask } from "./lib/task-state";
-import { reorderByDrop, type DropPosition } from "./lib/image-order";
-import { dragAutoScrollVelocity, DRAG_SCROLL_HORIZONTAL_TOLERANCE, DRAG_SCROLL_VERTICAL_TOLERANCE } from "./lib/drag-auto-scroll";
+import { reorderByTarget } from "./lib/image-order";
 import { createHtmlPreviewPayload, openHtmlPreviewTab, type HtmlPreviewMode } from "./lib/html-preview";
 
 type DetailTask = {
@@ -189,14 +188,7 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const [images, setImages] = useState<ImageAsset[]>(() => initialTask ? initialTask.images ?? [] : brandKey === "amante" ? [DEFAULT_BRAND_IMAGE] : []);
   const [draft, setDraft] = useState<TaskDraftValues>(() => ({ kurlyEnabled: initialTask?.kurlyEnabled !== false, product: initialTask?.product ?? "", item: initialTask?.item ?? "", option: initialTask?.option ?? "", storeLink: initialTask?.storeLink ?? "", note: initialTask?.note ?? "", thumbnailNas: initialTask?.thumbnailNas ?? "", detailNas: initialTask?.detailNas ?? "", shootingNas: initialTask?.shootingNas ?? "", vendors: initialTask?.vendors ?? [], detailHtml: initialTask?.html ?? "" }));
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageListRef = useRef<HTMLDivElement>(null);
-  const dragScrollFrameRef = useRef<number | null>(null);
-  const dragScrollLastFrameTimeRef = useRef<number | null>(null);
-  const dragScrollVelocityRef = useRef(0);
   const htmlPreviewVersionRef = useRef(Date.now());
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-  const [dropPosition, setDropPosition] = useState<DropPosition>("before");
   const [fileDragActive, setFileDragActive] = useState(false);
   const [htmlPreviewError, setHtmlPreviewError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -220,6 +212,8 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
     };
   }, []);
   const handleModalKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    // The sensor handles Escape while sorting; don't also close the modal.
+    if (event.key === "Escape" && modalRef.current?.querySelector('.image-list[data-sorting="true"]')) return;
     if (event.key === "Escape") {
       event.preventDefault();
       if (confirmOverwrite) setConfirmOverwrite(false);
@@ -253,71 +247,6 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty, saving]);
-  const stopDragAutoScroll = useCallback(() => {
-    dragScrollVelocityRef.current = 0;
-    if (dragScrollFrameRef.current !== null) cancelAnimationFrame(dragScrollFrameRef.current);
-    dragScrollFrameRef.current = null;
-    dragScrollLastFrameTimeRef.current = null;
-  }, []);
-  const updateDragAutoScroll = useCallback((clientX: number, clientY: number) => {
-    const list = imageListRef.current;
-    if (!list) {
-      stopDragAutoScroll();
-      return false;
-    }
-
-    const bounds = list.getBoundingClientRect();
-    const withinHorizontalRange = clientX >= bounds.left - DRAG_SCROLL_HORIZONTAL_TOLERANCE && clientX <= bounds.right + DRAG_SCROLL_HORIZONTAL_TOLERANCE;
-    const withinVerticalRange = clientY >= bounds.top - DRAG_SCROLL_VERTICAL_TOLERANCE && clientY <= bounds.bottom + DRAG_SCROLL_VERTICAL_TOLERANCE;
-    if (!withinHorizontalRange || !withinVerticalRange) {
-      stopDragAutoScroll();
-      return false;
-    }
-    const velocity = dragAutoScrollVelocity(clientY, bounds.top, bounds.bottom);
-    dragScrollVelocityRef.current = velocity;
-    if (velocity === 0) {
-      stopDragAutoScroll();
-      return true;
-    }
-    if (dragScrollFrameRef.current !== null) return true;
-
-    const scrollFrame = (timestamp: number) => {
-      const currentList = imageListRef.current;
-      const currentVelocity = dragScrollVelocityRef.current;
-      if (!currentList || currentVelocity === 0) {
-        dragScrollFrameRef.current = null;
-        return;
-      }
-      const previousTimestamp = dragScrollLastFrameTimeRef.current;
-      const elapsedSeconds = previousTimestamp === null ? 1 / 60 : Math.min(0.032, (timestamp - previousTimestamp) / 1000);
-      dragScrollLastFrameTimeRef.current = timestamp;
-      const maxScrollTop = Math.max(0, currentList.scrollHeight - currentList.clientHeight);
-      const nextScrollTop = Math.min(maxScrollTop, Math.max(0, currentList.scrollTop + currentVelocity * elapsedSeconds));
-      if (nextScrollTop === currentList.scrollTop) {
-        dragScrollFrameRef.current = null;
-        dragScrollLastFrameTimeRef.current = null;
-        return;
-      }
-      currentList.scrollTop = nextScrollTop;
-      dragScrollFrameRef.current = requestAnimationFrame(scrollFrame);
-    };
-    dragScrollFrameRef.current = requestAnimationFrame(scrollFrame);
-    return true;
-  }, [stopDragAutoScroll]);
-  useEffect(() => {
-    if (!draggedId) {
-      stopDragAutoScroll();
-      return;
-    }
-    const followPointer = (event: DragEvent) => {
-      if (updateDragAutoScroll(event.clientX, event.clientY)) event.preventDefault();
-    };
-    document.addEventListener("dragover", followPointer);
-    return () => {
-      document.removeEventListener("dragover", followPointer);
-      stopDragAutoScroll();
-    };
-  }, [draggedId, stopDragAutoScroll, updateDragAutoScroll]);
   // This version is only used for <img> elements in this editor. It is never
   // included in the generated HTML that is saved, displayed, or copied.
   const [previewVersion, setPreviewVersion] = useState(() => Date.now());
@@ -338,7 +267,7 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
   const sortImages = (items: ImageAsset[]) => [...items].sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" }));
   const addFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    const next = Array.from(files).map((file, index) => ({ id: `${file.name}-${file.lastModified}-${index}`, name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, htmlTarget: "common" as const }));
+    const next = Array.from(files).map((file) => ({ id: crypto.randomUUID(), name: file.name, url: URL.createObjectURL(file), mimeType: file.type || "image/*", size: file.size, htmlTarget: "common" as const }));
     const batch = next.length > 1 ? sortImages(next) : next;
     setImages((current) => [...current, ...batch]);
     setPreserveStoredHtml(false);
@@ -353,11 +282,11 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
     refreshImagePreviews();
   };
   const toggleVendor = (vendor: string) => setDraft((current) => ({ ...current, vendors: current.vendors.includes(vendor) ? current.vendors.filter((item) => item !== vendor) : [...current.vendors, vendor] }));
-  const moveImage = (fromId: string, toId: string, position: DropPosition) => {
-    const next = reorderByDrop(images, fromId, toId, position);
+  const moveImage = (fromId: string, toId: string) => {
+    const next = reorderByTarget(images, fromId, toId);
     if (next === images) return;
     setPreserveStoredHtml(false);
-    setImages(next);
+    setImages((current) => reorderByTarget(current, fromId, toId));
   };
   const saveTask = async (overwrite = false) => {
     if (savingRef.current) return;
@@ -379,7 +308,7 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
       <section><h3>기본 정보 입력</h3><Field label="제품명" value={draft.product} onChange={(value) => setDraft((current) => ({ ...current, product: value }))} /><ItemSelectField brandKey={brandKey} value={draft.item} onChange={(value) => setDraft((current) => ({ ...current, item: value }))} /><Field label="옵션" placeholder="색상, 구성 등을 입력하세요" value={draft.option} onChange={(value) => setDraft((current) => ({ ...current, option: value }))} /><Field label="자사몰 링크" value={draft.storeLink} onChange={(value) => setDraft((current) => ({ ...current, storeLink: value }))} /><div className="vendor-field"><label>거래처</label><div>{VENDOR_OPTIONS.map((vendor) => { const selected = draft.vendors.includes(vendor); return <button key={vendor} type="button" className={`${vendorClass(vendor)}${selected ? " active" : ""}`} aria-pressed={selected} onClick={() => toggleVendor(vendor)}>{vendor}</button>; })}</div></div><Field label="참고사항" value={draft.note} onChange={(value) => setDraft((current) => ({ ...current, note: value }))} /></section>
       <section className="nas-form"><h3>NAS 경로 입력</h3><TextArea label="썸네일 NAS 경로" value={draft.thumbnailNas} onChange={(value) => setDraft((current) => ({ ...current, thumbnailNas: value }))} /><TextArea label="상세페이지 NAS 경로" value={draft.detailNas} onChange={(value) => setDraft((current) => ({ ...current, detailNas: value }))} /><TextArea label="촬영본 NAS 경로" value={draft.shootingNas} onChange={(value) => setDraft((current) => ({ ...current, shootingNas: value }))} /></section>
     </div> : <div className="step-two">
-      <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><div className="image-list" ref={imageListRef}>{images.map((image) => <div className={`file ${draggedId === image.id ? "dragging" : ""} ${dragOverId === image.id && draggedId !== image.id ? `drag-over-${dropPosition}` : ""}`} key={image.id} draggable onDragStart={(event) => { stopDragAutoScroll(); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", image.id); setDraggedId(image.id); }} onDragOver={(event) => { if (!draggedId && !event.dataTransfer.types.includes("text/plain")) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; if (draggedId === image.id) { setDragOverId(null); return; } const bounds = event.currentTarget.getBoundingClientRect(); const nextPosition = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after"; setDragOverId((current) => current === image.id ? current : image.id); setDropPosition((current) => current === nextPosition ? current : nextPosition); }} onDrop={(event) => { if (event.dataTransfer.files.length) return; const sourceId = event.dataTransfer.getData("text/plain") || draggedId; if (!sourceId) return; event.preventDefault(); event.stopPropagation(); const bounds = event.currentTarget.getBoundingClientRect(); const finalPosition = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after"; moveImage(sourceId, image.id, finalPosition); stopDragAutoScroll(); setDraggedId(null); setDragOverId(null); }} onDragEnd={() => { stopDragAutoScroll(); setDraggedId(null); setDragOverId(null); }}><span className="drag-handle" aria-hidden="true">⋮⋮</span><img className="thumb" src={withPreviewImageVersion(image.url, previewVersion)} alt="" draggable={false} /><div className="file-meta"><b title={image.name}>{image.name}</b>{imageMetadata(image) && <small>{imageMetadata(image)}</small>}</div><div className="file-actions"><ImageTargetSelect value={getImageHtmlTarget(image)} imageName={image.name} onChange={(target) => changeImageTarget(image.id, target)} /><button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => removeImage(image.id)}><Trash2 {...iconProps} /></button></div></div>)}</div></section>
+      <section className="upload-side" onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setFileDragActive(true); } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setFileDragActive(false); }} onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); addFiles(event.dataTransfer.files); setFileDragActive(false); } }}><h3><i>1</i> 이미지 업로드</h3><label>이미지 목록</label><input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" multiple onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ""; }} /><button className={`dropzone ${fileDragActive ? "drag-active" : ""}`} type="button" onClick={() => fileInputRef.current?.click()}><ImagePlus {...iconProps} /><strong>{fileDragActive ? "여기에 놓아 업로드" : "이미지 업로드 영역"}</strong><span>이미지 파일을 선택하거나 끌어다 놓으세요.</span></button><SortableImageList images={images} previewVersion={previewVersion} onMove={moveImage} onRemove={removeImage} onTargetChange={changeImageTarget} /></section>
       <section className="preview-side"><h3><i>2</i> 이미지 미리보기</h3>{htmlPreviewError && <p className="preview-window-error" role="alert">{htmlPreviewError}</p>}<div className="preview-grid"><div className="preview-box"><div className="preview-box-title"><span>HTML 미리보기</span><button type="button" onClick={() => openHtmlPreview("general")}><ExternalLink size={14} aria-hidden="true" />새 창 미리보기</button></div><div className="preview-canvas"><div className="preview-strip">{generalImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{generalImages.length === 0 && <div className="preview-empty">표시할 이미지가 없습니다.</div>}</div></div><div className={`preview-box kurly-preview-box${draft.kurlyEnabled ? "" : " is-disabled"}`}><div className="preview-box-title"><label className="kurly-preview-toggle"><input type="checkbox" checked={draft.kurlyEnabled} onChange={(event) => setDraft((current) => ({ ...current, kurlyEnabled: event.target.checked }))} />컬리 HTML 미리보기</label><button type="button" disabled={!draft.kurlyEnabled} onClick={() => openHtmlPreview("kurly")}><ExternalLink size={14} aria-hidden="true" />새 창 미리보기</button></div><div className="preview-canvas"><div className="preview-strip">{kurlyImages.map((image) => <div className="preview-placeholder" key={image.id}><img src={withPreviewImageVersion(image.url, previewVersion)} alt={image.name} /></div>)}</div>{kurlyImages.length === 0 && <div className="preview-empty" role="status">{draft.kurlyEnabled ? "표시할 이미지가 없습니다." : "컬리용 HTML 생성 안 함"}</div>}</div></div></div></section>
       <HtmlCodeDrawer generalHtml={generalHtml} kurlyHtml={generateKurlyHtml(images, brandKey, draft.kurlyEnabled)} kurlyEnabled={draft.kurlyEnabled}
         onCopy={copyText} />
@@ -387,17 +316,6 @@ function TaskModal({ step, brandKey, onClose, onNext, onSave, initialTask }: { s
     {saveError && <div className="modal-save-error" role="alert">{saveError}</div>}
   </section>{confirmDiscard && <DiscardChangesDialog onKeep={() => setConfirmDiscard(false)} onDiscard={onClose} />}
     {confirmOverwrite && <OverwriteTaskDialog product={draft.product || "새 작업"} item={draft.item || "미분류"} option={draft.option} vendors={draft.vendors} note={draft.note} onCancel={() => setConfirmOverwrite(false)} onOverwrite={() => { setConfirmOverwrite(false); void saveTask(true); }} />}</div>;
-}
-
-function formatBytes(size: number) {
-  if (size < 1024) return `${size} B`;
-  return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function imageMetadata(image: ImageAsset) {
-  const values = [image.mimeType?.split("/").pop()?.toUpperCase()];
-  if (typeof image.size === "number") values.push(formatBytes(image.size));
-  return values.filter(Boolean).join(" · ");
 }
 
 function Field({ label, placeholder, select, value, onChange }: { label: string; placeholder?: string; select?: boolean; value?: string; onChange?: (value: string) => void }) {

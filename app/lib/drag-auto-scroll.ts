@@ -4,6 +4,10 @@ export const DRAG_SCROLL_VERTICAL_TOLERANCE = 24;
 export const DRAG_SCROLL_MAX_SPEED = 840;
 export const DRAG_SCROLL_MIN_SPEED = 120;
 
+export function dragPointerWithinBounds(point: { x: number; y: number }, bounds: { left: number; right: number; top: number; bottom: number }) {
+  return Number.isFinite(point.x) && Number.isFinite(point.y) && point.x >= bounds.left - DRAG_SCROLL_HORIZONTAL_TOLERANCE && point.x <= bounds.right + DRAG_SCROLL_HORIZONTAL_TOLERANCE && point.y >= bounds.top - DRAG_SCROLL_VERTICAL_TOLERANCE && point.y <= bounds.bottom + DRAG_SCROLL_VERTICAL_TOLERANCE;
+}
+
 export function dragAutoScrollVelocity(pointerY: number, top: number, bottom: number, edgeSize = DRAG_SCROLL_EDGE_SIZE, maxSpeed = DRAG_SCROLL_MAX_SPEED) {
   if (bottom <= top || edgeSize <= 0 || maxSpeed <= 0) return 0;
 
