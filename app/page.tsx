@@ -8,6 +8,8 @@ import { getImageHtmlTarget, imagesForHtmlTarget } from "./lib/image-target";
 import type { AssetImage, ImageHtmlTarget } from "./lib/task-types";
 import { SortableImageList } from "./components/SortableImageList";
 import { HtmlCodeDrawer } from "./components/HtmlCodeDrawer";
+import { ShareLinkPopover } from "./components/ShareLinkPopover";
+import { copyToClipboard } from "./lib/clipboard";
 import { matchesSearchText, matchesTaskSearch, normalizeSearch } from "./lib/task-search";
 import { mergeSavedTask } from "./lib/task-state";
 import { reorderByTarget } from "./lib/image-order";
@@ -461,6 +463,11 @@ export default function Home() {
   const [shareSelection, setShareSelection] = useState<Set<string>>(() => new Set());
   const [shareBusy, setShareBusy] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
+  const shareCopyButtonRef = useRef<HTMLButtonElement>(null);
+  const shareRequestRef = useRef(false);
+  const shareContextRef = useRef(0);
+  const preparedShareRef = useRef<{ selectionKey: string; url: string } | null>(null);
+  const [sharePopoverUrl, setSharePopoverUrl] = useState<string | null>(null);
   const [tableToast, setTableToast] = useState("");
   const tableToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenu | null>(null);
@@ -523,12 +530,13 @@ export default function Home() {
     document.addEventListener("pointerdown", dismiss);
     return () => { window.removeEventListener("asset-row-context-menu", open); document.removeEventListener("pointerdown", dismiss); };
   }, []);
-  const resetForBrand = () => { setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setLoadState("loading"); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
+  const clearPreparedShare = () => { shareContextRef.current++; preparedShareRef.current = null; setSharePopoverUrl(null); };
+  const resetForBrand = () => { clearPreparedShare(); setBrandMenuOpen(false); setSelected(null); setQuery(""); setDataGroups([]); setLoadState("loading"); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); };
   const changeBrand = (brandKey: BrandKey) => {
     if (brandKey === selectedBrand) { setBrandMenuOpen(false); return; }
     writeBrandToLocation(brandKey); resetForBrand(); window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const enterShareMode = () => { setSelected(null); setBrandMenuOpen(false); setShareMode(true); setShareSelection(new Set()); setShareMessage(""); };
+  const enterShareMode = () => { clearPreparedShare(); setSelected(null); setBrandMenuOpen(false); setShareMode(true); setShareSelection(new Set()); setShareMessage(""); };
   const handleTaskSelect = (task: DetailTask) => { if (selected && taskKey(selected) === taskKey(task)) closeDetail(); else openDetail(task); };
   const confirmDelete = async () => {
     if (!deleteTarget?.id) return;
@@ -551,24 +559,34 @@ export default function Home() {
       setDeleteBusy(false);
     }
   };
-  const toggleShareTask = (task: DetailTask) => { const id = taskKey(task); setShareSelection((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
-  const finishShareMode = () => { setShareMode(false); setShareSelection(new Set()); setShareMessage(""); setSelected(null); };
+  const toggleShareTask = (task: DetailTask) => { if (shareRequestRef.current) return; clearPreparedShare(); const id = taskKey(task); setShareSelection((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
+  const finishShareMode = () => { clearPreparedShare(); setShareMode(false); setShareSelection(new Set()); setShareMessage(""); setSelected(null); };
+  const shareCopySucceeded = () => { finishShareMode(); setShareMessage("공유 링크가 복사되었습니다."); };
   const createShareLink = async () => {
-    if (!shareSelection.size) return;
-    setShareBusy(true); setShareMessage("");
+    if (!shareSelection.size || shareRequestRef.current) return;
+    shareRequestRef.current = true;
+    const context = shareContextRef.current;
+    const selectionKey = `${selectedBrand}:${JSON.stringify([...shareSelection].sort())}`;
+    setShareBusy(true); setShareMessage(""); setSharePopoverUrl(null);
     try {
-      const selectedTasks = allTasks.filter((task) => shareSelection.has(taskKey(task)));
-      const response = await fetch("/api/shares", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tasks: selectedTasks }) });
-      if (!response.ok) throw new Error("공유 링크를 만들지 못했습니다.");
-      const payload = await response.json() as { shareUrl?: string };
-      if (!payload.shareUrl) throw new Error("공유 링크가 없습니다.");
-      const shareUrl = new URL(payload.shareUrl, window.location.origin).toString();
-      await copyText(shareUrl);
-      finishShareMode();
-      setShareMessage("공유 링크가 복사되었습니다.");
+      let shareUrl = preparedShareRef.current?.selectionKey === selectionKey ? preparedShareRef.current.url : null;
+      if (!shareUrl) {
+        const selectedTasks = allTasks.filter((task) => shareSelection.has(taskKey(task)));
+        const response = await fetch("/api/shares", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tasks: selectedTasks }) });
+        if (!response.ok) throw new Error("공유 링크를 만들지 못했습니다.");
+        const payload = await response.json() as { shareUrl?: string };
+        if (!payload.shareUrl) throw new Error("공유 링크가 없습니다.");
+        if (context !== shareContextRef.current) return;
+        shareUrl = new URL(payload.shareUrl, window.location.origin).toString();
+        preparedShareRef.current = { selectionKey, url: shareUrl };
+      }
+      const copied = await copyToClipboard(shareUrl);
+      if (context !== shareContextRef.current) return;
+      if (copied) shareCopySucceeded();
+      else setSharePopoverUrl(shareUrl);
     } catch (error) {
-      setShareMessage(error instanceof Error ? error.message : "공유 링크를 만들지 못했습니다.");
-    } finally { setShareBusy(false); }
+      if (context === shareContextRef.current) setShareMessage(error instanceof Error ? error.message : "공유 링크를 만들지 못했습니다.");
+    } finally { shareRequestRef.current = false; setShareBusy(false); }
   };
   useEffect(() => { resetForBrand(); }, [selectedBrand]);
   useEffect(() => {
@@ -616,7 +634,8 @@ export default function Home() {
       <p>{loadState === "loading" ? "잠시만 기다려 주세요." : loadState === "error" ? "네트워크 연결을 확인한 뒤 다시 시도해 주세요." : searchActive ? "제품명, 품목, 옵션, NAS 경로 또는 HTML·링크로 다시 검색해 보세요." : "새 작업 등록 버튼으로 첫 자산을 추가해 주세요."}</p>
       {loadState === "error" && <button type="button" onClick={() => setReloadKey((current) => current + 1)}>다시 시도</button>}
       {loadState === "ready" && searchActive && <button type="button" onClick={() => setQuery("")}>검색 초기화</button>}
-    </div></td></tr> : shownGroups.map((group, index) => <GroupRows group={group} key={`${selectedBrand}:${group.product}:${searchActive}`} initiallyExpanded={searchActive} showOptionColumn={showOptionColumn} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer className={shareMode ? `share-mode-footer${shareSelection.size ? " has-share-selection" : ""}${shareMessage ? " has-share-message" : ""}` : undefined}>{shareMode ? <><div className="share-selection-hint"><span>자산 행을 선택하세요</span><b>{shareSelection.size}개 선택됨</b></div>{selectedShareTasks.length > 0 && <div className="share-selected-items" aria-label="선택된 품목" aria-live="polite">{selectedShareTasks.map((task) => { const label = `${task.product} · ${task.item}${task.option ? ` · ${task.option}` : ""}`; return <button type="button" className="share-selected-chip" key={taskKey(task)} title={`${label} 선택 해제`} aria-label={`${label} 선택 해제`} disabled={shareBusy} onClick={() => toggleShareTask(task)}><span>{label}</span><X size={13} aria-hidden="true" /></button>; })}</div>}</> : <span className="table-summary" role="status">{loadState === "loading" ? "불러오는 중…" : loadState === "error" ? "목록 조회 실패" : searchActive ? `검색 결과: 제품 ${shownGroups.length}개 · 품목 ${shownTaskCount}개 / 전체 품목 ${allTasks.length}개` : `제품 ${dataGroups.length}개 · 품목 ${allTasks.length}개`}</span>}{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}{shareMode ? <div className="share-actions"><button type="button" className="share-cancel" disabled={shareBusy} onClick={finishShareMode}>취소</button><button type="button" className="share-copy-button" disabled={shareBusy || shareSelection.size === 0} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : "링크 복사"}</span></button></div> : <button type="button" className="share-button" disabled={shareBusy || loadState !== "ready" || allTasks.length === 0} onClick={enterShareMode}><Share2 {...iconProps} /><span>공유</span></button>}</footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
+    </div></td></tr> : shownGroups.map((group, index) => <GroupRows group={group} key={`${selectedBrand}:${group.product}:${searchActive}`} initiallyExpanded={searchActive} showOptionColumn={showOptionColumn} onSelect={handleTaskSelect} shareMode={shareMode} selectedIds={shareSelection} onToggleShare={toggleShareTask} tone={index % 2} />)}</tbody></table></div><footer className={shareMode ? `share-mode-footer${shareSelection.size ? " has-share-selection" : ""}${shareMessage ? " has-share-message" : ""}` : undefined}>{shareMode ? <><div className="share-selection-hint"><span>자산 행을 선택하세요</span><b>{shareSelection.size}개 선택됨</b></div>{selectedShareTasks.length > 0 && <div className="share-selected-items" aria-label="선택된 품목" aria-live="polite">{selectedShareTasks.map((task) => { const label = `${task.product} · ${task.item}${task.option ? ` · ${task.option}` : ""}`; return <button type="button" className="share-selected-chip" key={taskKey(task)} title={`${label} 선택 해제`} aria-label={`${label} 선택 해제`} disabled={shareBusy} onClick={() => toggleShareTask(task)}><span>{label}</span><X size={13} aria-hidden="true" /></button>; })}</div>}</> : <span className="table-summary" role="status">{loadState === "loading" ? "불러오는 중…" : loadState === "error" ? "목록 조회 실패" : searchActive ? `검색 결과: 제품 ${shownGroups.length}개 · 품목 ${shownTaskCount}개 / 전체 품목 ${allTasks.length}개` : `제품 ${dataGroups.length}개 · 품목 ${allTasks.length}개`}</span>}{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}{shareMode ? <div className="share-actions"><button type="button" className="share-cancel" disabled={shareBusy} onClick={finishShareMode}>취소</button><button type="button" className="share-copy-button" ref={shareCopyButtonRef} aria-haspopup="dialog" aria-expanded={sharePopoverUrl !== null} disabled={shareBusy || shareSelection.size === 0} onClick={() => void createShareLink()}><Share2 {...iconProps} /><span>{shareBusy ? "링크 생성 중..." : "링크 복사"}</span></button></div> : <button type="button" className="share-button" ref={shareCopyButtonRef} disabled={shareBusy || loadState !== "ready" || allTasks.length === 0} onClick={enterShareMode}><Share2 {...iconProps} /><span>공유</span></button>}</footer></section>{selected && !shareMode && <DetailPanel task={selected} closing={detailClosing} onClose={closeDetail} onEdit={() => { setEditingTask(selected); setModal(1); }} />}</div>
+    {sharePopoverUrl && <ShareLinkPopover key={sharePopoverUrl} url={sharePopoverUrl} anchorRef={shareCopyButtonRef} onClose={() => setSharePopoverUrl(null)} onCopied={shareCopySucceeded} />}
     {tableToast && <div className="table-copy-toast" role="status">{tableToast}</div>}
     {rowContextMenu && <div className="row-context-menu" role="menu" style={{ left: rowContextMenu.x, top: rowContextMenu.y }}><button type="button" role="menuitem" onClick={() => { setDeleteTarget(rowContextMenu.task); setRowContextMenu(null); }}><Trash2 {...iconProps} /> 삭제</button></div>}
     {deleteTarget && <div className="delete-confirm-backdrop" role="presentation"><section className="delete-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title"><h2 id="delete-confirm-title">행 삭제</h2><p><strong>{deleteTarget.product} {deleteTarget.item}{deleteTarget.option ? ` · ${deleteTarget.option}` : ""}</strong>을 삭제하시겠습니까?</p><div><button type="button" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>아니오</button><button type="button" className="delete-confirm-button" disabled={deleteBusy} onClick={() => void confirmDelete()}>{deleteBusy ? "삭제 중..." : "예"}</button></div></section></div>}
