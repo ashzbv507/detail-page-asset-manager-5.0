@@ -1,5 +1,6 @@
 import { withPreviewImageVersion } from "./html";
 import type { AssetImage } from "./task-types";
+import { PREVIEW_VIEW_STORAGE_KEY } from "./preview-view-state";
 
 export const HTML_PREVIEW_STORAGE_KEY = "detail-page-asset-manager:html-preview";
 
@@ -57,6 +58,7 @@ export function openHtmlPreviewTab(payload: HtmlPreviewPayload): HtmlPreviewOpen
     // The initial blank document inherits our origin. Populate its own
     // sessionStorage before navigating; no shared localStorage or live sync.
     previewWindow.sessionStorage.setItem(HTML_PREVIEW_STORAGE_KEY, JSON.stringify(payload));
+    previewWindow.sessionStorage.removeItem(PREVIEW_VIEW_STORAGE_KEY);
     previewWindow.opener = null;
     previewWindow.location.replace("/html-preview");
   } catch {

@@ -30,7 +30,7 @@ test('parses valid payloads and rejects malformed values', () => {
 
 function memoryStorage() {
   const values = new Map();
-  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
 }
 
 function mockBrowser(run, options = {}) {
@@ -42,6 +42,7 @@ function mockBrowser(run, options = {}) {
     if (options.openThrows) throw new Error('popup error');
     if (options.blocked) return null;
     const storage = memoryStorage();
+    if (options.inheritedView) storage.setItem('detail-page-asset-manager:preview-view', options.inheritedView);
     const tab = {
       opener: global.window,
       sessionStorage: options.storageThrows ? { setItem() { throw new Error('storage unavailable'); } } : storage,
@@ -123,6 +124,13 @@ test('focus errors in embedded browsers do not discard a successfully opened pre
     assert.equal(tabs[0].path, '/html-preview');
     assert.notEqual(tabs[0].closed, true);
   }, { focusThrows: true });
+});
+
+test('new preview tabs start fresh instead of inheriting another preview view state', () => {
+  mockBrowser(({ tabs }) => {
+    assert.equal(openHtmlPreviewTab(createHtmlPreviewPayload('general', [], 1)), 'opened');
+    assert.equal(tabs[0].sessionStorage.getItem('detail-page-asset-manager:preview-view'), null);
+  }, { inheritedView: '{"zoom":150,"scrollTop":999}' });
 });
 
 test('all preview entry points use the isolated tab opener and do not publish shared data', () => {
