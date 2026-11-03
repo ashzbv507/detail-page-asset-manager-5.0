@@ -334,6 +334,11 @@ const AMANTE_IMBEDDING_ITEM_GROUPS: ItemGroup[] = [
   { label: "기타", items: ["토퍼", "소파패드", "프릴 소파패드", "바디필로우", "베개솜", "이불솜", "커튼", "담요", "냉감 토퍼", "이불 겸 패드"] },
 ];
 
+const AMANTE_ITEM_GROUPS: ItemGroup[] = AMANTE_IMBEDDING_ITEM_GROUPS.map((group) => ({
+  ...group,
+  items: group.items.flatMap((item) => item === "극세사 침대패드" ? [item, "자가발열 침대패드"] : [item]),
+}));
+
 const SERENDIMENT_ITEM_GROUPS: ItemGroup[] = [
   { label: "이불", items: ["차렵이불", "이불커버", "홑겹이불커버", "누빔이불커버", "냉감 여름이불", "냉감 홑이불", "극세사 차렵이불", "간절기 차렵이불", "자가발열 차렵이불", "고밀도 순면 베딩"] },
   { label: "베개커버", items: ["베개커버", "2겹 베개커버", "자루 베개커버", "가로형 자루 베개커버", "밴딩 베개커버"] },
@@ -351,7 +356,7 @@ const SOMMIER_ITEM_GROUPS: ItemGroup[] = [
 ];
 
 const ITEM_GROUPS_BY_BRAND: Record<BrandKey, ItemGroup[]> = {
-  amante: AMANTE_IMBEDDING_ITEM_GROUPS,
+  amante: AMANTE_ITEM_GROUPS,
   imbedding: AMANTE_IMBEDDING_ITEM_GROUPS,
   serendiment: SERENDIMENT_ITEM_GROUPS,
   sommier: SOMMIER_ITEM_GROUPS,
