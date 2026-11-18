@@ -24,3 +24,14 @@ test('self-heating bed pad is available only under Amante pads/mattress covers',
   }
   assert.deepEqual(groups.amante.map(group => ({ ...group, items: group.items.filter(item => item !== '자가발열 침대패드') })), groups.imbedding);
 });
+
+test('snap bed pad and padded blanket are listed in the correct groups only for Amante and Imbedding', () => {
+  for (const [item, label] of [['스냅 침대패드+매트커버', '패드/매트커버'], ['패딩담요', '기타']]) {
+    for (const brand of ['amante', 'imbedding']) {
+      assert.deepEqual(groups[brand].filter(group => group.items.includes(item)).map(group => group.label), [label]);
+    }
+    for (const brand of ['serendiment', 'sommier']) {
+      assert(!groups[brand].some(group => group.items.includes(item)));
+    }
+  }
+});
