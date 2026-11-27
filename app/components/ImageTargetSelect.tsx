@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
+import { iconProps } from "../lib/icon-props";
 import type { ImageHtmlTarget } from "../lib/task-types";
 
 const OPTIONS: { value: ImageHtmlTarget; label: string }[] = [
@@ -62,7 +63,7 @@ export function ImageTargetSelect({ value, imageName, onChange }: { value: Image
   return <span className="image-target-control" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => { event.preventDefault(); event.stopPropagation(); }}>
     <button ref={triggerRef} type="button" className="image-target-trigger" aria-label={`${imageName} HTML 적용 범위: ${OPTIONS.find((option) => option.value === value)?.label}`} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined} onClick={() => open ? close() : show()} onKeyDown={(event) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); show(); }
-    }}><TargetBadge value={value} /><ChevronDown className="image-target-chevron" size={12} aria-hidden="true" /></button>
+    }}><TargetBadge value={value} /><ChevronDown className="image-target-chevron" {...iconProps} /></button>
     {open && createPortal(<div ref={menuRef} id={menuId} className="image-target-menu" role="listbox" aria-label={`${imageName} HTML 적용 범위`} style={position} onPointerDown={(event) => event.stopPropagation()} onKeyDown={(event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); return; }
       if (event.key === "Tab") { close(true); return; }
@@ -76,6 +77,6 @@ export function ImageTargetSelect({ value, imageName, onChange }: { value: Image
       else return;
       event.preventDefault();
       choices[next]?.focus();
-    }}>{OPTIONS.map((option) => <button type="button" role="option" aria-selected={value === option.value} tabIndex={-1} key={option.value} className="image-target-option" onClick={() => { onChange(option.value); close(true); }}><TargetBadge value={option.value} />{value === option.value && <Check size={14} strokeWidth={1.75} aria-hidden="true" />}</button>)}</div>, document.body)}
+    }}>{OPTIONS.map((option) => <button type="button" role="option" aria-selected={value === option.value} tabIndex={-1} key={option.value} className="image-target-option" onClick={() => { onChange(option.value); close(true); }}><TargetBadge value={option.value} />{value === option.value && <Check {...iconProps} />}</button>)}</div>, document.body)}
   </span>;
 }

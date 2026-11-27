@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Minus, Plus, RefreshCw } from "lucide-react";
+import { iconProps } from "../lib/icon-props";
 import { readHtmlPreviewSnapshot, previewImageUrl, type HtmlPreviewPayload } from "../lib/html-preview";
 import { capturePreviewAnchor, clampPreviewZoom, fitPreviewZoom, previewAnchorDelta, PREVIEW_BASE_WIDTH, PREVIEW_MIN_ZOOM, PREVIEW_MAX_ZOOM, PREVIEW_ZOOM_STEP, type PreviewAnchor } from "../lib/preview-zoom";
 import styles from "./preview.module.css";
@@ -165,13 +166,13 @@ export default function HtmlPreviewPage() {
     <header className={styles.toolbar} aria-label="미리보기 크기 조절">
       <div className={styles.heading}>
         <span className={styles.title}>{payload?.mode === "kurly" ? "컬리 HTML" : "HTML"} 미리보기</span>
-        <button type="button" className={styles.refreshButton} disabled={!hasImages || refreshing} onClick={refreshImages} aria-label="이미지 새로고침" aria-busy={refreshing}><RefreshCw size={14} aria-hidden="true" />{refreshing ? "불러오는 중…" : "이미지 새로고침"}</button>
+        <button type="button" className={styles.refreshButton} disabled={!hasImages || refreshing} onClick={refreshImages} aria-label="이미지 새로고침" aria-busy={refreshing}><RefreshCw {...iconProps} />{refreshing ? "불러오는 중…" : "이미지 새로고침"}</button>
       </div>
       <div className={styles.controls}>
         <div className={styles.zoomControls}>
-          <button type="button" className={styles.iconButton} aria-label="미리보기 축소" disabled={!hasImages || activeZoom <= PREVIEW_MIN_ZOOM} onClick={() => changeZoom(activeZoom - PREVIEW_ZOOM_STEP)}><Minus size={16} aria-hidden="true" /></button>
+          <button type="button" className={styles.iconButton} aria-label="미리보기 축소" disabled={!hasImages || activeZoom <= PREVIEW_MIN_ZOOM} onClick={() => changeZoom(activeZoom - PREVIEW_ZOOM_STEP)}><Minus {...iconProps} /></button>
           <input type="range" aria-label="미리보기 배율" aria-valuetext={`${activeZoom}%`} min={PREVIEW_MIN_ZOOM} max={PREVIEW_MAX_ZOOM} step={1} value={activeZoom} disabled={!hasImages} onChange={(event) => changeZoom(Number(event.target.value))} />
-          <button type="button" className={styles.iconButton} aria-label="미리보기 확대" disabled={!hasImages || activeZoom >= PREVIEW_MAX_ZOOM} onClick={() => changeZoom(activeZoom + PREVIEW_ZOOM_STEP)}><Plus size={16} aria-hidden="true" /></button>
+          <button type="button" className={styles.iconButton} aria-label="미리보기 확대" disabled={!hasImages || activeZoom >= PREVIEW_MAX_ZOOM} onClick={() => changeZoom(activeZoom + PREVIEW_ZOOM_STEP)}><Plus {...iconProps} /></button>
           <output className={styles.percentage} aria-label="현재 배율">{activeZoom}%</output>
         </div>
         <div className={styles.presets}>

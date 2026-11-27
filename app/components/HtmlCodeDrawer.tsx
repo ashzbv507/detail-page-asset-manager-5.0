@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { Check, Code2, Copy, X } from "lucide-react";
+import { iconProps } from "../lib/icon-props";
 
 type Props = {
   generalHtml: string;
@@ -28,11 +29,11 @@ export function HtmlCodeDrawer({ generalHtml, kurlyHtml, kurlyEnabled = true, on
     <button ref={triggerRef} type="button" className="html-bookmark" aria-expanded={open} aria-controls={id}
       aria-label={open ? "HTML 코드 패널 닫기" : "HTML 코드 패널 열기"}
       onClick={() => { setOpen(!open); setCopiedValue(null); setCopyError(false); }}>
-      <Code2 size={17} aria-hidden="true" />
+      <Code2 {...iconProps} />
     </button>
     {open && <section id={id} className="html-code-drawer" aria-label="HTML 코드">
       <div className="html-drawer-heading"><h3>HTML 코드</h3>
-        <button type="button" className="html-drawer-close" aria-label="코드 패널 닫기" onClick={close}><X size={18} aria-hidden="true" /></button>
+        <button type="button" className="html-drawer-close" aria-label="코드 패널 닫기" onClick={close}><X {...iconProps} /></button>
       </div>
       <div className="html-drawer-tabs" role="tablist" aria-label="HTML 종류">
         {(["general", "kurly"] as const).map((target) => <button key={target} type="button" role="tab"
@@ -59,7 +60,7 @@ export function HtmlCodeDrawer({ generalHtml, kurlyHtml, kurlyEnabled = true, on
           const key = `${activeMode}:${value}`;
           try { await onCopy(value); setCopiedValue(key); setCopyError(false); }
           catch { setCopyError(true); }
-        }}>{copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}복사</button>
+        }}>{copied ? <Check {...iconProps} /> : <Copy {...iconProps} />}복사</button>
       </div>
     </section>}
   </div>;

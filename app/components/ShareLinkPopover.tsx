@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Copy, X } from "lucide-react";
+import { iconProps } from "../lib/icon-props";
 import { copyToClipboard } from "../lib/clipboard";
 import { sharePopoverPosition } from "../lib/share-popover-position";
 
@@ -89,9 +90,9 @@ export function ShareLinkPopover({ url, anchorRef, onClose, onCopied }: Props) {
   if (typeof document === "undefined") return null;
   return createPortal(<div ref={panelRef} className="share-link-popover" role="dialog" aria-labelledby={titleId} aria-describedby={descriptionId}
     data-side={position?.side ?? "above"} style={{ left: position?.left ?? 0, top: position?.top ?? 0, visibility: position ? "visible" : "hidden", "--share-arrow-left": `${position?.arrowLeft ?? 0}px` } as CSSProperties}>
-    <div className="share-link-popover-heading"><h2 id={titleId}>링크를 직접 복사해 주세요</h2><button type="button" className="share-link-popover-close" aria-label="링크 복사 안내 닫기" onClick={() => { onClose(); anchorRef.current?.focus({ preventScroll: true }); }}><X size={15} strokeWidth={1.75} aria-hidden="true" /></button></div>
+    <div className="share-link-popover-heading"><h2 id={titleId}>링크를 직접 복사해 주세요</h2><button type="button" className="share-link-popover-close" aria-label="링크 복사 안내 닫기" onClick={() => { onClose(); anchorRef.current?.focus({ preventScroll: true }); }}><X {...iconProps} /></button></div>
     <p id={descriptionId}>자동 복사가 되지 않았어요.<br />아래 링크를 선택해 직접 복사할 수 있습니다.</p>
     <input ref={inputRef} className="share-link-popover-url" aria-label="공유 링크" value={url} readOnly spellCheck={false} onFocus={(event) => event.currentTarget.select()} onClick={(event) => event.currentTarget.select()} />
-    <div className="share-link-popover-bottom"><span role="status">{retryFailed ? "복사가 제한되어 있어요. 링크를 직접 복사해 주세요." : "생성된 링크는 그대로 유지됩니다."}</span><button type="button" className="share-link-popover-retry" disabled={copying} onClick={() => void retryCopy()}><Copy size={14} strokeWidth={1.75} aria-hidden="true" />{copying ? "복사 중…" : "다시 복사"}</button></div>
+    <div className="share-link-popover-bottom"><span role="status">{retryFailed ? "복사가 제한되어 있어요. 링크를 직접 복사해 주세요." : "생성된 링크는 그대로 유지됩니다."}</span><button type="button" className="share-link-popover-retry" disabled={copying} onClick={() => void retryCopy()}><Copy {...iconProps} />{copying ? "복사 중…" : "다시 복사"}</button></div>
   </div>, document.body);
 }

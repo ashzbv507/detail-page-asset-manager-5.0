@@ -240,7 +240,7 @@ main {
   height: 15px;
   border: 1px solid var(--hairline);
   border-radius: 50%;
-  background: #fff url("/figma-chevron-down.svg") center/9px no-repeat;
+  background: #fff;
 }
 h1 {
   margin: 4px 0 3px;
@@ -273,7 +273,6 @@ h1 {
 .search svg {
   flex: 0 0 auto;
   margin-right: 10px;
-  color: var(--muted);
 }
 .search input {
   width: 100%;
@@ -542,14 +541,6 @@ td:last-child {
   height: 23px;
   margin-left: auto;
 }
-.cell-copy svg,
-.path-row svg {
-  width: 17px;
-  height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
 .table-shell > footer {
   position: absolute;
   right: 0;
@@ -715,10 +706,6 @@ td:last-child {
   border-radius: 6px;
   font-size: 12px;
   gap: 3px;
-}
-.path-row button svg {
-  width: 14px;
-  height: 14px;
 }
 .modal-backdrop {
   position: fixed;
@@ -1135,11 +1122,7 @@ td:last-child {
   color: #737379;
 }
 .dropzone svg {
-  width: 28px;
   margin-bottom: 8px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
 }
 .dropzone strong {
   color: #55555b;
@@ -1254,21 +1237,10 @@ td:last-child {
   color: rgba(55, 55, 55, 0.55);
   font-size: 12px;
 }
-.expand svg {
-  width: 16px;
-  height: 16px;
-}
-.icon-button svg {
-  width: 16px;
-  height: 16px;
-}
 .modal h2 {
   display: flex;
   align-items: center;
   gap: 9px;
-}
-.modal h2 > svg {
-  color: #77777d;
 }
 .modal .primary {
   display: inline-flex;
@@ -1276,24 +1248,16 @@ td:last-child {
   justify-content: center;
   gap: 9px;
 }
-.modal .primary > svg {
-  width: 16px;
-  height: 16px;
-}
 .field > div > svg:not(.field-search) {
   position: absolute;
   right: 12px;
   top: 12px;
-  width: 16px;
-  height: 16px;
-  color: #555;
   pointer-events: none;
 }
 .field-search {
   position: absolute;
   left: 11px;
   top: 12px;
-  color: #6e6e73;
   z-index: 1;
 }
 .field:has(.field-search) input {
@@ -1315,10 +1279,6 @@ td:last-child {
   padding: 0;
   border-radius: var(--radius-sm);
   color: var(--subtle);
-}
-.cell-copy button svg {
-  width: 16px;
-  height: 16px;
 }
 .image-list {
   min-height: 0;
@@ -1436,10 +1396,6 @@ td:last-child {
 .store-link:hover {
   text-decoration: underline;
 }
-.store-link svg {
-  width: 18px;
-  height: 18px;
-}
 .store-link-empty {
   color: var(--subtle);
 }
@@ -1477,7 +1433,7 @@ td:last-child {
   height: 17px;
   border: 1px solid var(--hairline);
   border-radius: 50%;
-  background: var(--surface) url("/figma-chevron-down.svg") center/8px no-repeat;
+  background: var(--surface);
   box-sizing: border-box;
   box-shadow: 0 1px 3px rgba(31, 41, 55, 0.14);
   pointer-events: none;
@@ -1524,7 +1480,7 @@ td:last-child {
   clip-path: none;
   transform: none;
 }
-.brand-avatar > svg {
+.brand-avatar > .brand-chevron {
   display: none;
 }
 .brand-menu {
@@ -1758,8 +1714,6 @@ td:last-child {
   justify-content: center;
   width: 16px;
   color: var(--subtle);
-  font-size: 14px;
-  letter-spacing: -4px;
   cursor: grab;
 }
 .file {
@@ -1924,7 +1878,8 @@ td:last-child {
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.82);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
+  line-height: 16px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2098,10 +2053,6 @@ td:last-child {
   .modal.compact .step-one > section + section { border-left: 0; border-top: 1px solid var(--hairline); }
   .html-code-drawer { right: 44px; width: calc(100% - 60px); }
 }
-.new-task > svg {
-  width: 16px;
-  height: 16px;
-}
 .new-task b {
   font-size: var(--body-size);
   font-weight: 700;
@@ -2206,10 +2157,6 @@ td:last-child {
   height: 52px;
   padding: 0 20px 0 0;
   color: var(--subtle);
-}
-.detail-tabs .close svg {
-  width: 16px;
-  height: 16px;
 }
 .detail-body {
   height: calc(100% - 52px);
@@ -2354,17 +2301,9 @@ td:last-child {
 .saved-detail-panel .html-link-actions > button.copy-action > svg,
 .saved-detail-panel .html-link-actions > button.preview-action > svg {
   display: block !important;
-  flex: 0 0 16px;
-  width: 16px !important;
-  min-width: 16px;
-  height: 16px !important;
-  min-height: 16px;
-  color: #74747a !important;
-  fill: none !important;
-  stroke: #74747a !important;
+  flex: none;
   opacity: 1;
   overflow: visible;
-  shape-rendering: geometricPrecision;
 }
 .saved-detail-panel .html-link-actions [data-tooltip],
 .saved-detail-panel .path-row [data-tooltip] {
@@ -2515,11 +2454,6 @@ td:last-child {
   padding-inline: 8px;
   white-space: nowrap;
 }
-.saved-detail-panel .path-row .copy-icon {
-  width: 16px;
-  height: 16px;
-  transform: scale(0.75);
-}
 .table-shell > footer {
   display: flex;
   align-items: center;
@@ -2667,10 +2601,7 @@ td:last-child {
   white-space: nowrap;
 }
 .modal > header .modal-action > svg {
-  width: 15px;
-  height: 15px;
   flex: 0 0 auto;
-  stroke-width: 2;
 }
 .modal > header .modal-action-secondary {
   background: var(--canvas);
@@ -3002,10 +2933,6 @@ main.share-page .app-header {
 .row-context-menu button:hover {
   background: #fff1f0;
 }
-.row-context-menu svg {
-  width: 15px;
-  height: 15px;
-}
 .delete-confirm-backdrop {
   position: fixed;
   z-index: 210;
@@ -3190,7 +3117,7 @@ h1 {
   background: var(--surface);
   box-shadow: 0 3px 10px rgba(31, 41, 55, 0.1);
 }
-.brand-avatar > svg {
+.brand-avatar > .brand-chevron {
   display: block;
   position: absolute;
   right: -1px;
@@ -3198,7 +3125,7 @@ h1 {
   box-sizing: border-box;
   width: 18px;
   height: 18px;
-  padding: 3px;
+  padding: 0;
   border: 1px solid var(--hairline);
   border-radius: 50%;
   background: var(--surface);
@@ -3210,7 +3137,7 @@ h1 {
   border-color: rgba(48, 56, 68, 0.25);
   box-shadow: 0 5px 13px rgba(31, 41, 55, 0.14);
 }
-.brand-switcher.is-open .brand-avatar > svg {
+.brand-switcher.is-open .brand-avatar > .brand-chevron {
   transform: rotate(180deg);
   border-color: rgba(28, 126, 214, 0.42);
   color: var(--accent);
@@ -3914,7 +3841,6 @@ h1 {
 
   .share-selected-chip > svg {
     flex: 0 0 auto;
-    color: var(--muted);
   }
 
   .share-selected-chip:active:not(:disabled) {
@@ -4238,4 +4164,12 @@ h1 {
     padding-inline: 8px;
     white-space: nowrap;
   }
+}
+
+/* Geometry and stroke come exclusively from app/lib/icon-props.ts. */
+.lucide {
+  flex-shrink: 0;
+}
+.brand-chevron > svg {
+  display: block;
 }

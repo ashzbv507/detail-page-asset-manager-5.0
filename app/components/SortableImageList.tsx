@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { closestCenter, DndContext, DragOverlay, KeyboardSensor, PointerSensor, useSensor, useSensors, type CollisionDetection } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trash2 } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
+import { iconProps } from "../lib/icon-props";
 import { ImageTargetSelect } from "./ImageTargetSelect";
 import { withPreviewImageVersion } from "../lib/html";
 import { getImageHtmlTarget } from "../lib/image-target";
@@ -74,11 +75,11 @@ function SortableImage({ image, previewVersion, onRemove, onTargetChange }: Omit
   return <div ref={setNodeRef} className={`file sortable-file${isDragging ? " is-sort-placeholder" : ""}`}
     style={{ transform: CSS.Transform.toString(transform), transition }} onPointerDown={(event) => listeners?.onPointerDown?.(event)}>
     <button ref={setActivatorNodeRef} type="button" className="drag-handle" {...attributes} onKeyDown={(event) => listeners?.onKeyDown?.(event)}
-      aria-label={`${image.name} 순서 이동`} title="드래그하여 이동 · Space로 선택 후 방향키로 이동">⋮⋮</button>
+      aria-label={`${image.name} 순서 이동`} title="드래그하여 이동 · Space로 선택 후 방향키로 이동"><GripVertical {...iconProps} /></button>
     <ImageContents image={image} previewVersion={previewVersion} />
     <div className="file-actions" onPointerDown={(event) => event.stopPropagation()}>
       <ImageTargetSelect value={getImageHtmlTarget(image)} imageName={image.name} onChange={(target) => onTargetChange(image.id, target)} />
-      <button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => onRemove(image.id)}><Trash2 size={16} strokeWidth={1.75} aria-hidden="true" /></button>
+      <button className="delete-file" type="button" aria-label={`${image.name} 삭제`} onClick={() => onRemove(image.id)}><Trash2 {...iconProps} /></button>
     </div>
   </div>;
 }
@@ -131,7 +132,7 @@ export function SortableImageList({ images, previewVersion, onMove, onRemove, on
         {images.map((image) => <SortableImage key={image.id} image={image} previewVersion={previewVersion} onRemove={onRemove} onTargetChange={onTargetChange} />)}
       </SortableContext>
       {typeof document !== "undefined" && createPortal(<DragOverlay dropAnimation={null} zIndex={10000}>
-        {activeImage ? <div className="file sort-drag-overlay" aria-hidden="true"><span className="drag-handle">⋮⋮</span><ImageContents image={activeImage} previewVersion={previewVersion} /><span className="sort-overlay-target">{getImageHtmlTarget(activeImage) === "general" ? "컬리 제외" : getImageHtmlTarget(activeImage) === "kurly" ? "컬리 전용" : "공통"}</span></div> : null}
+        {activeImage ? <div className="file sort-drag-overlay" aria-hidden="true"><span className="drag-handle"><GripVertical {...iconProps} /></span><ImageContents image={activeImage} previewVersion={previewVersion} /><span className="sort-overlay-target">{getImageHtmlTarget(activeImage) === "general" ? "컬리 제외" : getImageHtmlTarget(activeImage) === "kurly" ? "컬리 전용" : "공통"}</span></div> : null}
       </DragOverlay>, document.body)}
     </DndContext>
   </div>;
