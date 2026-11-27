@@ -19,6 +19,22 @@ export function createHtmlPreviewPayload(mode: HtmlPreviewMode, images: AssetIma
   };
 }
 
+/** Preview saved HTML in its own order, never the editor's separate image list. */
+export function previewImagesFromHtml(html: string): AssetImage[] {
+  return [...html.matchAll(/<img\s+src=['"]([^'"]+)['"]/g)].map((match, index) => {
+    const url = match[1];
+    let name = `image-${index + 1}`;
+    try { name = decodeURIComponent(new URL(url).pathname.split("/").pop() || name); } catch { /* Keep the fallback name. */ }
+    return { id: `html-preview-${index}-${url}`, name, url };
+  });
+}
+
+export function htmlPreviewFailureMessage(result: HtmlPreviewOpenResult): string | null {
+  if (result === "popup-blocked") return "팝업이 차단되었습니다. 팝업을 허용해 주세요.";
+  if (result === "storage-unavailable") return "새 창 미리보기 데이터를 준비하지 못했습니다.";
+  return null;
+}
+
 export function parseHtmlPreviewPayload(value: string | null): HtmlPreviewPayload | null {
   if (!value) return null;
   try {

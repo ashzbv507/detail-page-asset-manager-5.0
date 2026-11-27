@@ -1403,6 +1403,26 @@ td:last-child {
   flex: 1 1 auto;
   min-width: 0;
 }
+.html-preview-cell {
+  width: 100%;
+  gap: 6px;
+}
+.html-preview-cell > span {
+  white-space: nowrap;
+}
+.html-preview-cell button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.html-preview-cell button:hover:not(:disabled),
+.html-preview-cell button:focus-visible {
+  background: rgba(28, 126, 214, 0.08);
+  color: var(--accent);
+}
+.html-preview-cell button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .c-html {
   width: 31.341%;
 }

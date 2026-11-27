@@ -5,7 +5,7 @@ const ts = require('typescript');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { test } = require('node:test');
-const { Copy, ExternalLink, ArrowLeftRight, GripVertical } = require('lucide-react');
+const { Copy, ExternalLink, Eye, ArrowLeftRight, GripVertical } = require('lucide-react');
 
 const root = path.join(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -17,11 +17,12 @@ const screens = [
   'app/page.tsx', 'app/share/[token]/ShareViewer.tsx', 'app/html-preview/page.tsx',
   'app/components/HtmlCodeDrawer.tsx', 'app/components/ShareLinkPopover.tsx',
   'app/components/SortableImageList.tsx', 'app/components/ImageTargetSelect.tsx',
+  'app/components/HtmlPreviewCell.tsx',
 ];
 
 test('one shared set of decorative Lucide defaults', () => {
   assert.deepEqual(iconProps, { size: 16, strokeWidth: 1.75, absoluteStrokeWidth: false, color: 'currentColor', 'aria-hidden': true, focusable: false });
-  for (const Icon of [Copy, ExternalLink, ArrowLeftRight, GripVertical]) {
+  for (const Icon of [Copy, ExternalLink, Eye, ArrowLeftRight, GripVertical]) {
     const html = renderToStaticMarkup(React.createElement(Icon, iconProps));
     for (const attribute of ['width="16"', 'height="16"', 'stroke-width="1.75"', 'stroke="currentColor"', 'aria-hidden="true"', 'focusable="false"']) assert(html.includes(attribute), attribute);
     assert(!html.includes('vector-effect='));
