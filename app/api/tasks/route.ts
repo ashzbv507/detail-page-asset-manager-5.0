@@ -1,6 +1,7 @@
 import { buildImageUrl, generateKurlyHtml } from "../../lib/html";
 import { decodeStoredImageUrl, encodeStoredImageUrl } from "../../lib/image-target";
 import { normalizeTaskVendors, TASK_CONFLICT_COLUMNS, taskDuplicatePath } from "../../lib/task-identity";
+import { DUPLICATE_TASK_MESSAGE } from "../../lib/task-duplicate";
 import type { BrandKey, ImageHtmlTarget } from "../../lib/task-types";
 
 type ImagePayload = { id?: string; name?: string; url?: string; mimeType?: string; size?: number; htmlTarget?: ImageHtmlTarget; excludeFromKurly?: boolean };
@@ -89,11 +90,16 @@ async function supabaseRequest(path: string, init: RequestInit = {}) {
   }
   return response;
 }
-function toRow(payload: TaskPayload): DatabaseRow {
+function toRow(payload: TaskPayload, preserveImageUrls = false): DatabaseRow {
   const productName = text(payload.productName); const itemName = text(payload.itemName);
   if (!productName || !itemName) throw new Error("제품명과 품목은 필수입니다.");
   const brandKey = brand(payload.brandKey) as BrandKey;
-  const images = Array.isArray(payload.images) ? payload.images.map((image) => storedImageUrl(image, brandKey)).filter(Boolean) : list(payload.imageUrls);
+  const images = Array.isArray(payload.images) ? payload.images.map((image) => {
+    const url = text(image.url);
+    // Reuse saved addresses exactly in duplicate mode. Newly selected local
+    // files still follow the existing filename-to-brand-address save rule.
+    return preserveImageUrls && url && !/^(?:blob:|data:)/i.test(url) ? encodeStoredImageUrl(url, image) : storedImageUrl(image, brandKey);
+  }).filter(Boolean) : list(payload.imageUrls);
   return { id: text(payload.id) || crypto.randomUUID(), brand_key: brandKey, product_name: productName, item_name: itemName, option_name: text(payload.optionName), store_link: text(payload.storeLink), image_urls: images, detail_html: text(payload.detailHtml), thumbnail_nas: text(payload.thumbnailNas), detail_nas: text(payload.detailNas), shooting_nas: text(payload.shootingNas), kurly_enabled: payload.kurlyEnabled !== false, vendors: normalizeTaskVendors(payload.vendors), note: text(payload.note) };
 }
 function toClient(row: DatabaseRow) {
@@ -130,10 +136,38 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { task?: TaskPayload; tasks?: TaskPayload[]; overwrite?: boolean };
+    const body = await request.json() as { task?: TaskPayload; tasks?: TaskPayload[]; overwrite?: boolean; mode?: "duplicate" };
+    if (body.mode === "duplicate") {
+      if (!body.task || body.tasks || body.overwrite || Object.hasOwn(body.task, "id")) {
+        return Response.json({ error: "복제 저장은 원본 ID와 덮어쓰기 없이 한 작업씩 요청해 주세요." }, { status: 400 });
+      }
+      const row = toRow(body.task, true);
+      // Preserve manually authored stored HTML until the existing editor's
+      // image-list change rules deliberately regenerate it.
+      row.detail_html = typeof body.task.detailHtml === "string" ? body.task.detailHtml : "";
+      const duplicate = () => Response.json({ error: DUPLICATE_TASK_MESSAGE, code: "DUPLICATE_TASK" }, { status: 409 });
+      if (await findDuplicate(row)) return duplicate();
+      try {
+        // The named conflict target also requires the real DB's six-column
+        // unique index. Missing/wrong indexes fail closed, never fall back to
+        // merge/upsert. DO NOTHING covers duplicates arriving after the check.
+        const response = await supabaseRequest(`asset_tasks?on_conflict=${TASK_CONFLICT_COLUMNS}`, {
+          method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([row]),
+        });
+        const created = await response.json() as DatabaseRow[];
+        if (!created.length) return duplicate();
+        return Response.json({ tasks: created.map(toClient) });
+      } catch (error) {
+        if (error instanceof DatabaseError && error.code === "23505") {
+          if (await findDuplicate(row)) return duplicate();
+          throw new Error(NOTE_MIGRATION_MESSAGE);
+        }
+        throw error;
+      }
+    }
     const payload = body.tasks ?? (body.task ? [body.task] : []);
     if (!payload.length) return Response.json({ error: "저장할 작업 데이터가 없습니다." }, { status: 400 });
-    const rows = payload.map(toRow);
+    const rows = payload.map((task) => toRow(task));
     if (body.task && !body.tasks) {
       const row = rows[0];
       const duplicate = await findDuplicate(row);
@@ -165,7 +199,10 @@ export async function PATCH(request: Request) {
   try {
     const id = text(new URL(request.url).searchParams.get("id"));
     if (!id) return Response.json({ error: "수정할 작업 ID가 없습니다." }, { status: 400 });
-    const body = await request.json() as TaskPayload | { task?: TaskPayload };
+    const body = await request.json() as TaskPayload | { task?: TaskPayload; mode?: string };
+    if ("mode" in body && body.mode === "duplicate") {
+      return Response.json({ error: "복제는 원본 수정이 아닌 새 작업 등록으로 요청해 주세요." }, { status: 400 });
+    }
     const payload = ("task" in body && body.task ? body.task : body) as TaskPayload;
     const row = toRow(payload);
     const response = await supabaseRequest(`asset_tasks?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ ...row, id }) });
