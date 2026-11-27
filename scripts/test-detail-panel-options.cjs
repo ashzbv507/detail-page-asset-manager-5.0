@@ -33,6 +33,7 @@ const panels = [
   ['main', loadPanel('app/page.tsx', 'DetailPanel')],
   ['shared', loadPanel('app/share/[token]/ShareViewer.tsx', 'SharedDetailPanel')],
 ];
+const TaskModal = loadPanel('app/page.tsx', 'TaskModal');
 const pathRows = [
   ['main', loadPanel('app/page.tsx', 'PathRow')],
   ['shared', loadPanel('app/share/[token]/ShareViewer.tsx', 'SharedPathRow')],
@@ -91,6 +92,19 @@ function infoGrid(Panel, task) {
 }
 
 for (const [label, Panel] of panels) {
+  test(`${label}: Drive and NAS headings follow the brand without changing saved paths`, () => {
+    for (const brandKey of ['amante', 'imbedding', 'serendiment', 'sommier', undefined]) {
+      const storage = brandKey === 'serendiment' || brandKey === 'sommier' ? 'Drive' : 'NAS';
+      const task = { ...example, brandKey, thumbnailNas: 'https://drive.google.com/drive/folders/thumbnail', detailNas: '/existing/detail', shootingNas: 'existing-shooting-path' };
+      const before = JSON.stringify(task);
+      const html = renderToStaticMarkup(React.createElement(Panel, { task, onClose() {}, onEdit() {}, onCopied() {}, onNotice() {}, closing: false }));
+      assert(html.includes(`<h3>${storage} 경로</h3>`));
+      assert(!html.includes(`<h3>${storage === 'Drive' ? 'NAS' : 'Drive'} 경로</h3>`));
+      for (const value of [task.thumbnailNas, task.detailNas, task.shootingNas]) assert(html.includes(value));
+      assert.equal(JSON.stringify(task), before);
+    }
+  });
+
   test(`${label}: information fields keep their slots with link before vendor`, () => {
     const task = { ...example, brandKey: 'amante', storeLink: 'https://amantehome.com/product/test/1/', vendors: ['컬리 ONLY'] };
     const grid = infoGrid(Panel, task);
@@ -136,3 +150,14 @@ for (const [label, Panel] of panels) {
     }
   });
 }
+
+test('new and edit modals use brand-specific path titles and field labels', () => {
+  for (const brandKey of ['amante', 'imbedding', 'serendiment', 'sommier']) {
+    const storage = brandKey === 'serendiment' || brandKey === 'sommier' ? 'Drive' : 'NAS';
+    for (const initialTask of [undefined, { ...example, brandKey }]) {
+      const html = renderToStaticMarkup(React.createElement(TaskModal, { step: 1, brandKey, initialTask, onClose() {}, onNext() {}, onSave() {} }));
+      assert(html.includes(`<h3>${storage} 경로 입력</h3>`));
+      for (const label of ['썸네일', '상세페이지', '촬영본']) assert(html.includes(`<span>${label} ${storage} 경로</span>`));
+    }
+  }
+});
